@@ -218,6 +218,14 @@ If no clear message list is found, Markdown contains a short note and JSON remai
 
 Best when the Abacus SDK provides an export method returning HTML or export content. If the SDK only returns metadata or a URL, metadata is stored and no external download is forced.
 
+In addition, **every HTML export** generates a readable transcript **`{title}_{id}_Konversation.html`** derived from the chat payload (same message detection as Markdown): alternating **Benutzer** vs **Assistent** (plus **System** when present), timestamps when available, and a short legend at the top. Use this file when you want to see who said what. **`Konversation.html` is styled for screen reading and for browser print / Save as PDF** (`@media print`, A4-oriented margins, page-break handling).
+
+If you select **only HTML** as export format (JSON/Markdown unchecked), each chat produces **only** `*_Konversation.html` — no SDK `*_html.*` artifacts — ideal for a single handoff document (PDF/print). When HTML is combined with other formats, SDK artifacts (`*_html.*`) are still written alongside JSON/Markdown as needed.
+
+Files are written next to the other formats with a `*_html` stem: raw HTML (or text/binary when the response is not HTML) uses a normal extension (e.g. `.html`, `.txt`, `.bin`). When the SDK returns a structured object, the main document is `*_html.html` if HTML is embedded in the payload, and a sidecar `*_html.meta.json` holds the full structured response (not a misleading `*.export.json` name).
+
+Each backup folder also contains **`index.html`** at the root: an overview page with links to every exported file (and to `manifest.json` / `errors.log`). Open it in a browser after unzipping — relative links work offline.
+
 ### ZIP
 
 Best for portable backup packages. ZIP contains `manifest.json`, `errors.log`, and all exported files. It is produced **after** all chats in the job are processed (or generated on first download if the job ran without up-front ZIP creation).

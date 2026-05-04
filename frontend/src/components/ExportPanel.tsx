@@ -48,6 +48,13 @@ export default function ExportPanel({ selectedCount, busy, onStart }: ExportPane
         <p className="mt-2 text-zinc-600">
           <strong>Alle exportieren</strong> verarbeitet alle <em>exportierbaren</em> Chats aus der geladenen Liste (unabhängig von Checkboxen). <strong>Auswahl exportieren</strong> nur die angehakten Zeilen.
         </p>
+        <p className="mt-2 text-zinc-600">
+          <strong>Nur HTML</strong> aktivieren (andere Formate abwählen): Pro Chat nur eine Datei{" "}
+          <span className="font-mono text-xs">*_Konversation.html</span> — ohne SDK-Zusatzdateien, für{" "}
+          <strong>PDF speichern oder Druck</strong> im Browser vorbereitet (Drucklayout A4, Hinweis in der Datei). Sind mehrere Formate aktiv, kommen zusätzlich die gewählten Dateien und weiterhin{" "}
+          <span className="font-mono text-xs">*_Konversation.html</span> sowie bei Bedarf der SDK-Roh-Export unter{" "}
+          <span className="font-mono text-xs">*_html.*</span>.
+        </p>
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-3">

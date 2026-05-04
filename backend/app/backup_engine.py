@@ -10,6 +10,8 @@ from .database import Database
 from .exporters import (
     create_backup_zip,
     extract_messages_to_markdown,
+    write_backup_index_html,
+    write_conversation_readout_html,
     write_export_result,
     write_json,
     write_markdown,
@@ -78,13 +80,30 @@ def run_backup_job(
                     item_errors.append(f"{item.type}:{item.id}: Markdown-Export fehlgeschlagen: {safe_error(exc)}")
 
             if "html" in request.formats:
+                # Nur Format „HTML“: ein einziges druckfähiges Konversationsdokument — ohne SDK-Roh-Export
+                conversation_only = set(request.formats) == {"html"}
+                if not conversation_only:
+                    try:
+                        export_result = abacus_service.export_chat_html(item)
+                        item_files.extend(write_export_result(export_result, path_base.with_name(path_base.name + "_html")))
+                    except AttributeError as exc:
+                        item_errors.append(f"{item.type}:{item.id}: HTML-Export nicht verfügbar: {safe_error(exc)}")
+                    except Exception as exc:
+                        item_errors.append(f"{item.type}:{item.id}: HTML-Export fehlgeschlagen: {safe_error(exc)}")
                 try:
-                    export_result = abacus_service.export_chat_html(item)
-                    item_files.extend(write_export_result(export_result, path_base.with_name(path_base.name + "_html_export")))
-                except AttributeError as exc:
-                    item_errors.append(f"{item.type}:{item.id}: HTML-Export nicht verfügbar: {safe_error(exc)}")
+                    item_files.append(
+                        write_conversation_readout_html(
+                            path_base.with_name(path_base.name + "_Konversation.html"),
+                            detail,
+                            title=item.title,
+                            source_type=item.type,
+                            source_id=item.id,
+                            deployment_id=item.deployment_id,
+                            conversation_only_export=conversation_only,
+                        )
+                    )
                 except Exception as exc:
-                    item_errors.append(f"{item.type}:{item.id}: HTML-Export fehlgeschlagen: {safe_error(exc)}")
+                    item_errors.append(f"{item.type}:{item.id}: Konversations-HTML (Lesbare Ansicht) fehlgeschlagen: {safe_error(exc)}")
 
             if not item_files:
                 failed += 1
@@ -115,9 +134,11 @@ def run_backup_job(
             "counts": counts,
             "items": manifest_items,
             "errors": errors,
+            "index_html": "index.html",
         }
         write_json(backup_dir / "manifest.json", manifest)
         errors_log.write_text("\n".join(errors) + ("\n" if errors else ""), encoding="utf-8")
+        write_backup_index_html(manifest, backup_dir)
 
         zip_path: Path | None = None
         if request.zip:

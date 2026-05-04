@@ -10,9 +10,14 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- **HTML-only export:** If the job request contains **only** `html` in `formats`, the backup writes **`{stem}_Konversation.html`** per chat only (no SDK `*_html.*` side files). Combined with other formats, the SDK export still runs and `*_Konversation.html` is always included when HTML is selected.
+- **Print / PDF:** `*_Konversation.html` includes screen hint (hidden when printing), `@page` A4 margins, `break-inside: avoid` on messages, and print color adjustment for PDF export from Chrome/Edge/Firefox.
+- **Backup overview:** Every export writes **`index.html`** at the backup root — a navigable HTML summary (table of chats, links to exported files, plus `manifest.json` / `errors.log`). `manifest.json` includes `"index_html": "index.html"`.
 - **Chat table:** Long lists show the first 10 rows by default; optional expand/collapse with a note that “select all” applies to the full filtered list.
 - **Export panel:** Explains job flow, ZIP timing, and “all” vs “selection” modes.
 - **Conversation scopes:** Long scope lists use a preview (first 10 lines) with expand to edit the full textarea.
+- **Status / Conversation Scopes:** Long lists of scope chips use the same preview (10 chips) with expand/collapse and scrollable areas.
+- **HTML export files:** Sidecar for structured SDK responses renamed from `*.export.json` to `*.meta.json`; HTML export base name uses `_html` (e.g. `Title_id_html.html` / `Title_id_html.meta.json`) so filenames no longer contain a misleading `.export.` segment.
 
 ### Documentation
 
