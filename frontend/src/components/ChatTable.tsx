@@ -1,4 +1,4 @@
-import { ArrowDownUp, CheckSquare, RefreshCw, Search, Square } from "lucide-react";
+import { ArrowDownUp, CheckSquare, ChevronDown, ChevronUp, RefreshCw, Search, Square } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ChatItem } from "../types";
 
@@ -14,6 +14,8 @@ interface ChatTableProps {
 
 type Filter = "all" | "ai_chat" | "deployment_conversation";
 type SortKey = "title" | "date" | "type";
+
+const INITIAL_TABLE_ROWS = 10;
 
 export function chatSelectionKey(item: ChatItem): string {
   return `${item.type}:${item.deployment_id || ""}:${item.id}`;
@@ -31,6 +33,7 @@ export default function ChatTable({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [tableExpanded, setTableExpanded] = useState(false);
 
   const visibleItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -48,6 +51,10 @@ export default function ChatTable({
         return String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || ""));
       });
   }, [filter, items, query, sortKey]);
+
+  const hasLongList = visibleItems.length > INITIAL_TABLE_ROWS;
+  const shownItems = tableExpanded || !hasLongList ? visibleItems : visibleItems.slice(0, INITIAL_TABLE_ROWS);
+  const hiddenCount = hasLongList ? visibleItems.length - INITIAL_TABLE_ROWS : 0;
 
   function toggleItem(item: ChatItem) {
     const next = new Set(selectedIds);
@@ -122,6 +129,12 @@ export default function ChatTable({
         </select>
       </div>
 
+      {hasLongList && !tableExpanded && (
+        <p className="mt-3 text-xs text-zinc-500">
+          Es werden die ersten {INITIAL_TABLE_ROWS} Zeilen angezeigt. „Alle auswählen“ bezieht sich auf alle {visibleItems.length} Einträge in dieser gefilterten Ansicht, nicht nur auf die sichtbaren Zeilen.
+        </p>
+      )}
+
       <div className="mt-5 overflow-x-auto border border-zinc-200">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-xs font-semibold uppercase text-zinc-600">
@@ -138,7 +151,7 @@ export default function ChatTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 bg-white">
-            {visibleItems.map((item) => {
+            {shownItems.map((item) => {
               const key = chatSelectionKey(item);
               return (
                 <tr key={key} className="hover:bg-zinc-50">
@@ -170,6 +183,29 @@ export default function ChatTable({
               <tr>
                 <td colSpan={7} className="px-3 py-10 text-center text-zinc-500">
                   Keine Chats in dieser Ansicht.
+                </td>
+              </tr>
+            )}
+            {hasLongList && (
+              <tr className="bg-zinc-50">
+                <td colSpan={7} className="px-3 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setTableExpanded((v) => !v)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+                  >
+                    {tableExpanded ? (
+                      <>
+                        <ChevronUp className="h-4 w-4" />
+                        Liste einklappen (nur {INITIAL_TABLE_ROWS} Zeilen)
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4" />
+                        Weitere {hiddenCount} Einträge anzeigen ({visibleItems.length} in dieser Ansicht)
+                      </>
+                    )}
+                  </button>
                 </td>
               </tr>
             )}

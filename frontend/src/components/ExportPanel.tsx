@@ -36,6 +36,20 @@ export default function ExportPanel({ selectedCount, busy, onStart }: ExportPane
       </div>
       <p className="mt-2 text-sm text-zinc-600">Backups enthalten vertrauliche Chat-Inhalte.</p>
 
+      <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+        <p className="font-medium text-zinc-900">Ablauf</p>
+        <p className="mt-1">
+          Nach Klick auf Export startet ein <strong>Server-Job</strong>: Für jeden Chat werden die gewählten Formate als <strong>Einzeldateien</strong> in einen neuen Backup-Ordner geschrieben (zusätzlich <span className="font-mono text-xs">manifest.json</span> und ggf.{" "}
+          <span className="font-mono text-xs">errors.log</span>).
+        </p>
+        <p className="mt-2">
+          Wenn <strong>ZIP erstellen</strong> aktiv ist, wird <strong>am Ende des Jobs</strong> eine Datei <span className="font-mono text-xs">backup.zip</span> im Backup-Ordner erzeugt. Die ZIP ist ein Archiv über dieselben Dateien (kein zusätzlicher Exportlauf). Ist die Option aus, werden nur Einzeldateien geschrieben; ein Klick auf <strong>Download</strong> in der Historie erzeugt die ZIP bei Bedarf beim ersten Abruf nachträglich.
+        </p>
+        <p className="mt-2 text-zinc-600">
+          <strong>Alle exportieren</strong> verarbeitet alle <em>exportierbaren</em> Chats aus der geladenen Liste (unabhängig von Checkboxen). <strong>Auswahl exportieren</strong> nur die angehakten Zeilen.
+        </p>
+      </div>
+
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         <div>
           <p className="text-sm font-semibold text-zinc-900">Formate</p>

@@ -162,12 +162,12 @@ def _resolve_items(request: ExportRequest, abacus_service: AbacusService) -> lis
         return []
     selected: list[ChatItem] = []
     for item in items:
-        keys = {
-            item.id,
-            f"{item.type}:{item.id}",
-            f"{item.type}:{item.deployment_id or ''}:{item.id}",
-        }
-        if wanted.intersection(keys) and item.exportable:
+        # Nur noch kanonischer Schlüssel wie im Frontend (chatSelectionKey):
+        # type + ":" + (deployment_id oder "") + ":" + id.
+        # NICHT item.id allein matchen — dieselbe ID kann in mehreren Deployments/Scopes vorkommen,
+        # dann würde eine Einzelauswahl fälschlich alle Treffer exportieren.
+        canonical = f"{item.type}:{item.deployment_id or ''}:{item.id}"
+        if canonical in wanted and item.exportable:
             selected.append(item)
     return selected
 

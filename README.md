@@ -176,11 +176,13 @@ The values are stored locally in:
 
 Click **Chats laden** or **Refresh**. The app lists available AI chat sessions and deployment conversations.
 
+Long lists show the first **10** rows by default; use **Weitere … anzeigen** to expand the full filtered list. **Alle auswählen** still selects every row that matches the current filters, not only the visible rows.
+
 ### 4. Select and Export
 
-1. Select individual chats or choose **Alle exportieren**.
+1. Select individual chats or choose **Alle exportieren** (all exportable chats from the loaded list, independent of checkboxes).
 2. Choose export formats: JSON, Markdown, HTML.
-3. Keep ZIP enabled if you want a downloadable archive.
+3. **ZIP erstellen**: when enabled, the server writes per-chat files first, then builds `backup.zip` at the **end** of the job (same folder contents, not a second export). When disabled, only loose files are written; the backup download endpoint can still create the ZIP on first download if needed.
 4. Start the export and watch job progress.
 
 ### 5. Download Backups
@@ -218,7 +220,7 @@ Best when the Abacus SDK provides an export method returning HTML or export cont
 
 ### ZIP
 
-Best for portable backup packages. ZIP contains `manifest.json`, `errors.log`, and all exported files.
+Best for portable backup packages. ZIP contains `manifest.json`, `errors.log`, and all exported files. It is produced **after** all chats in the job are processed (or generated on first download if the job ran without up-front ZIP creation).
 
 ## Technical Details
 
@@ -381,6 +383,10 @@ docker build -t abacus-backup-manager:local .
 ## Contributing
 
 Contributions are welcome. Open an issue or submit a pull request with a clear description of the change.
+
+## Changelog
+
+Release history and notable changes: see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
