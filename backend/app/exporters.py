@@ -531,7 +531,7 @@ def _message_list_score(values: list[Any]) -> int:
     for item in values[:20]:
         if not isinstance(item, dict):
             continue
-        if _first_key(item, CONTENT_KEYS) is not None:
+        if _content_value(item).strip():
             score += 2
         if _first_key(item, ROLE_KEYS) is not None:
             score += 1
@@ -549,12 +549,70 @@ def _first_key(data: Any, keys: tuple[str, ...]) -> Any:
 
 
 def _content_value(message: Any) -> str:
-    value = _first_key(message, CONTENT_KEYS)
-    if value is None:
+    """Plain text for one chat turn. Abacus deployment `history` often leaves BOT `text` empty and puts the body in `segments`."""
+    if not isinstance(message, dict):
         return ""
-    if isinstance(value, str):
-        return redact_secrets_from_text(value)
-    return redact_secrets_from_text(json.dumps(value, ensure_ascii=False, indent=2, default=str))
+    for key in CONTENT_KEYS:
+        if key not in message or message[key] is None:
+            continue
+        val = message[key]
+        if isinstance(val, str):
+            if val.strip():
+                return redact_secrets_from_text(val)
+        else:
+            return redact_secrets_from_text(json.dumps(val, ensure_ascii=False, indent=2, default=str))
+    seg_text = _text_from_segments(message.get("segments"))
+    if seg_text.strip():
+        return seg_text
+    for sk in ("streamed_data", "streamedData"):
+        v = message.get(sk)
+        if isinstance(v, str) and v.strip():
+            return redact_secrets_from_text(v)
+    return ""
+
+
+def _text_from_segments(segments: Any, depth: int = 0) -> str:
+    """Flatten Abacus `segments` (nested dicts, collapsible_component + text chunks)."""
+    if depth > 32 or segments is None:
+        return ""
+    if isinstance(segments, str):
+        s = segments.strip()
+        return redact_secrets_from_text(s) if s else ""
+    if isinstance(segments, dict):
+        return _segment_node_to_text(segments, depth + 1)
+    if not isinstance(segments, list):
+        return ""
+    parts: list[str] = []
+    for item in segments:
+        chunk = _text_from_segments(item, depth + 1)
+        if chunk.strip():
+            parts.append(chunk)
+    return "\n\n".join(parts)
+
+
+def _segment_node_to_text(node: dict, depth: int) -> str:
+    if depth > 32:
+        return ""
+    parts: list[str] = []
+
+    title = node.get("title")
+    if isinstance(title, str) and title.strip():
+        parts.append(redact_secrets_from_text(title.strip()))
+
+    seg = node.get("segment")
+    if isinstance(seg, str) and seg.strip():
+        parts.append(redact_secrets_from_text(seg.strip()))
+    elif isinstance(seg, dict):
+        inner = _segment_node_to_text(seg, depth + 1)
+        if inner.strip():
+            parts.append(inner)
+
+    for extra_key in ("text", "content", "body", "markdown"):
+        v = node.get(extra_key)
+        if isinstance(v, str) and v.strip():
+            parts.append(redact_secrets_from_text(v.strip()))
+
+    return "\n\n".join(parts)
 
 
 def _string_value(value: Any) -> str | None:

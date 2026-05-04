@@ -7,6 +7,7 @@ All notable changes to this project are documented in this file.
 ### Fixed
 
 - **Selected export:** Backend matched selection IDs against bare `item.id`, so duplicate IDs across deployments could export far more chats than selected. Matching now uses only the canonical key `type:deployment_id_or_empty:id`, aligned with the UI (`chatSelectionKey`).
+- **Konversation / Markdown:** Many deployment conversations keep the assistant’s visible text in nested **`segments`** while the `text` field is empty. The export now flattens `segments` (incl. collapsible/routing blocks) so `*_Konversation.html` and Markdown include full assistant turns. **Complete raw data** (incl. all keys) remains in **`*.json`**.
 
 ### Changed
 
