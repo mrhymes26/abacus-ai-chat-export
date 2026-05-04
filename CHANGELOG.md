@@ -23,3 +23,4 @@ All notable changes to this project are documented in this file.
 ### Documentation
 
 - **README:** Clarifies collapsed chat list, export/ZIP behavior, and related UX notes.
+- **README:** Notes that Abacus.AI does not offer a web UI export for chats; data access is via the API/SDK only.

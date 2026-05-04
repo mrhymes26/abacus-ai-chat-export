@@ -12,6 +12,8 @@ The app runs locally, connects to Abacus.AI only via API key, and stores backups
 
 ## Background
 
+Abacus.AI does **not** provide a built-in product feature to download or bulk-export chats from the web UI (no first-party “export conversation” button or similar). Access to conversation data is **only via the official API**, through clients such as the Python SDK (`abacusai`). This application implements that API-backed retrieval and packaging locally—there is no separate Abacus-side export service beyond what the API exposes for your account.
+
 This project was built for a simple need: keep local, inspectable backups of Abacus.AI conversations without manual copy-paste work or browser automation. The goal is a tool that:
 
 - just works locally in Docker
