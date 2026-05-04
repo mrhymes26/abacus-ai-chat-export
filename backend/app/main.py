@@ -12,6 +12,7 @@ from .config import get_settings
 from .database import Database
 from .exporters import create_backup_zip
 from .local_settings import (
+    has_supported_conversation_scope,
     merge_scope_summaries,
     read_conversation_scopes,
     summary_to_query_scopes,
@@ -111,8 +112,15 @@ async def connect(payload: ConnectRequest | None = Body(default=None)) -> Connec
 
 @app.get("/api/status", response_model=StatusResponse)
 async def status() -> StatusResponse:
+    _try_connect_silently()
     stored_scopes = read_conversation_scopes(settings.conversation_scopes_file).model_dump(mode="json")
     merged_scopes = merge_scope_summaries(settings.conversation_scope_summary, stored_scopes)
+    if abacus_service.connected and not has_supported_conversation_scope(merged_scopes):
+        try:
+            abacus_service.discover_conversation_scopes()
+            merged_scopes = merge_scope_summaries(merged_scopes, abacus_service.discovered_conversation_scope_summary())
+        except Exception:
+            pass
     return StatusResponse(
         has_env_api_key=bool(get_api_key_from_env()),
         has_stored_api_key=has_stored_api_key(settings.api_key_file),
@@ -247,6 +255,21 @@ def _ensure_connected() -> None:
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=safe_error(exc)) from exc
+
+
+def _try_connect_silently() -> None:
+    if abacus_service.connected:
+        return
+    if not get_api_key_from_env() and not has_stored_api_key(settings.api_key_file):
+        return
+    try:
+        abacus_service.connect_with_fallback(
+            None,
+            fallback_api_key=get_api_key_from_file(settings.api_key_file),
+            fallback_source="stored",
+        )
+    except Exception:
+        return
 
 
 def _conversation_scope_summary() -> dict[str, list[str]]:

@@ -85,9 +85,9 @@ export default function ConversationScopesPanel({ status, scopes, onSave }: Conv
       </form>
 
       <p className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-900">
-        Fuer Deployment Conversations verlangt das Abacus Python SDK mindestens einen Scope. Unterstuetzt werden
-        Deployment ID, External Application ID und Conversation Type; Werte koennen kommasepariert, mit Semikolon
-        oder zeilenweise eingetragen werden.
+        Deployment Conversation Scopes werden automatisch ueber das Abacus SDK ermittelt, wenn sie hier leer sind.
+        Manuell unterstuetzt werden Deployment ID, External Application ID und Conversation Type; Werte koennen
+        kommasepariert, mit Semikolon oder zeilenweise eingetragen werden.
       </p>
       {message && <p className="mt-3 text-sm font-medium text-emerald-700">{message}</p>}
       {error && <p className="mt-3 text-sm font-medium text-red-700">{error}</p>}

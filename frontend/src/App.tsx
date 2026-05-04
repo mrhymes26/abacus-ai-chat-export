@@ -101,7 +101,6 @@ export default function App() {
 
   const selectedCount = useMemo(() => selectedIds.size, [selectedIds]);
   const exporting = Boolean(job && !terminalStatuses.has(job.status));
-  const hasConversationScopes = useMemo(() => hasScopes(status), [status]);
 
   async function handleConnect(apiKey?: string, rememberLocally = false) {
     const result = await connectApi(apiKey, rememberLocally);
@@ -128,17 +127,11 @@ export default function App() {
     try {
       const latestStatus = await getStatus();
       setStatus(latestStatus);
-      const includeDeployments = hasScopes(latestStatus);
-      const result = await listChats(refresh, includeDeployments);
+      const result = await listChats(refresh, true);
       setChats(result.items);
       setChatWarnings(result.warnings || []);
       setSelectedIds(new Set());
-      addToast(
-        "success",
-        includeDeployments
-          ? `${result.items.length} Chats geladen.`
-          : `${result.items.length} AI Chats geladen. Deployment Conversations werden nach Scope-Konfiguration geladen.`
-      );
+      addToast("success", `${result.items.length} Chats geladen.`);
     } catch (exc) {
       addToast("error", exc instanceof Error ? exc.message : "Chats konnten nicht geladen werden.");
       throw exc;
@@ -215,9 +208,3 @@ export default function App() {
     </>
   );
 }
-
-function hasScopes(status: StatusResponse | null): boolean {
-  return supportedScopeKeys.some((key) => (status?.conversation_scopes?.[key] || []).length > 0);
-}
-
-const supportedScopeKeys = ["deployment_ids", "external_application_ids", "conversation_types"];

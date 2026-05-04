@@ -15,6 +15,9 @@ CANDIDATE_METHODS = [
     "list_chat_sessions",
     "get_chat_session",
     "export_chat_session",
+    "list_projects",
+    "list_deployments",
+    "list_external_applications",
     "list_deployment_conversations",
     "get_deployment_conversation",
     "export_deployment_conversation",
@@ -47,6 +50,9 @@ CREATED_KEYS = ("created_at", "createdAt", "created", "creation_time", "creation
 UPDATED_KEYS = ("updated_at", "updatedAt", "modified_at", "modifiedAt")
 LAST_EVENT_KEYS = ("last_event_created_at", "lastEventCreatedAt", "last_message_at", "lastMessageAt")
 MESSAGE_COUNT_KEYS = ("message_count", "messageCount", "num_messages", "numMessages")
+PROJECT_ID_KEYS = ("project_id", "projectId", "id")
+DEPLOYMENT_ID_KEYS = ("deployment_id", "deploymentId", "id")
+EXTERNAL_APPLICATION_ID_KEYS = ("external_application_id", "externalApplicationId", "application_id", "applicationId", "id")
 DEFAULT_ITEM_KEYS = (
     "items",
     "results",
@@ -147,6 +153,7 @@ class AbacusService:
         self.available_methods: list[str] = []
         self.missing_methods: list[str] = CANDIDATE_METHODS.copy()
         self.last_warnings: list[str] = []
+        self._discovered_conversation_scopes: list[dict[str, str]] | None = None
 
     @property
     def connected(self) -> bool:
@@ -200,6 +207,7 @@ class AbacusService:
         self.available_methods = available
         self.missing_methods = missing
         self.last_warnings = warnings
+        self._discovered_conversation_scopes = None
         return ConnectionResult(
             connected=True,
             source=source,  # type: ignore[arg-type]
@@ -213,6 +221,31 @@ class AbacusService:
         if active_client is None:
             return []
         return [method for method in CANDIDATE_METHODS if hasattr(active_client, method)]
+
+    def discover_conversation_scopes(self, force: bool = False) -> list[dict[str, str]]:
+        if self._discovered_conversation_scopes is not None and not force:
+            return self._discovered_conversation_scopes
+
+        client = self._require_client()
+        warnings: list[str] = []
+        scopes: list[dict[str, str]] = []
+        scopes.extend(self._discover_deployment_id_scopes(client, warnings))
+        scopes.extend(self._discover_external_application_scopes(client, warnings))
+        if not scopes:
+            scopes.extend({"conversation_type": value} for value in _deployment_conversation_type_values())
+            if scopes:
+                warnings.append(
+                    "Keine Deployment IDs oder External Application IDs automatisch gefunden; "
+                    "verwende Conversation-Type-Fallbacks aus dem installierten Abacus SDK."
+                )
+
+        self._discovered_conversation_scopes = _dedupe_scopes(scopes)
+        if warnings:
+            self.last_warnings = _dedupe_strings(self.last_warnings + warnings)
+        return self._discovered_conversation_scopes
+
+    def discovered_conversation_scope_summary(self) -> dict[str, list[str]]:
+        return _scope_summary_from_scopes(self._discovered_conversation_scopes or [])
 
     def list_all_chats(
         self,
@@ -242,15 +275,16 @@ class AbacusService:
             if hasattr(client, "list_deployment_conversations"):
                 method = getattr(client, "list_deployment_conversations")
                 scopes = _merge_conversation_scopes(deployment_ids or [], conversation_scopes or [])
+                if not scopes:
+                    scopes = self.discover_conversation_scopes()
                 if scopes:
                     for scope in scopes:
                         items.extend(self._list_deployment_conversations_for_scope(method, scope, warnings))
                 else:
                     warnings.append(
-                        "Deployment Conversations wurden uebersprungen, weil das Abacus SDK einen Scope verlangt. "
-                        "Setze ABACUS_DEPLOYMENT_IDS, ABACUS_EXTERNAL_APPLICATION_IDS oder "
-                        "ABACUS_CONVERSATION_TYPES. Diese Namen werden im Python SDK als deployment_id, "
-                        "external_application_id und conversation_type aufgerufen."
+                        "Deployment Conversations konnten nicht geladen werden, weil kein unterstuetzter Scope "
+                        "gesetzt oder automatisch ermittelt werden konnte. Setze eine Deployment ID, External "
+                        "Application ID oder Conversation Type."
                     )
             else:
                 warnings.append("SDK-Methode list_deployment_conversations fehlt.")
@@ -317,6 +351,60 @@ class AbacusService:
             )
         return ExportResult(ok=True, data=response)
 
+    def _discover_deployment_id_scopes(self, client: Any, warnings: list[str]) -> list[dict[str, str]]:
+        if not hasattr(client, "list_projects") or not hasattr(client, "list_deployments"):
+            return []
+        try:
+            projects = iter_paginated_results(
+                getattr(client, "list_projects"),
+                base_kwargs={"limit": 100},
+                item_keys=["projects", "items", "results"],
+                max_pages=1,
+            )
+        except Exception as exc:
+            warnings.append(f"Deployment-ID Autodiscovery ueber list_projects fehlgeschlagen: {safe_error(exc)}")
+            return []
+
+        scopes: list[dict[str, str]] = []
+        for project in projects[:100]:
+            project_id = _extract_text_value(project, PROJECT_ID_KEYS)
+            if not project_id:
+                continue
+            try:
+                deployments = iter_paginated_results(
+                    getattr(client, "list_deployments"),
+                    base_kwargs={"project_id": project_id},
+                    item_keys=["deployments", "items", "results"],
+                    max_pages=5,
+                )
+            except Exception as exc:
+                warnings.append(f"Deployments fuer project_id={project_id} konnten nicht ermittelt werden: {safe_error(exc)}")
+                continue
+            for deployment in deployments:
+                deployment_id = _extract_text_value(deployment, DEPLOYMENT_ID_KEYS)
+                if deployment_id:
+                    scopes.append({"deployment_id": deployment_id})
+        return scopes
+
+    def _discover_external_application_scopes(self, client: Any, warnings: list[str]) -> list[dict[str, str]]:
+        if not hasattr(client, "list_external_applications"):
+            return []
+        try:
+            applications = iter_paginated_results(
+                getattr(client, "list_external_applications"),
+                item_keys=["external_applications", "externalApplications", "items", "results"],
+                max_pages=1,
+            )
+        except Exception as exc:
+            warnings.append(f"External-Application Autodiscovery fehlgeschlagen: {safe_error(exc)}")
+            return []
+        scopes: list[dict[str, str]] = []
+        for application in applications:
+            external_application_id = _extract_text_value(application, EXTERNAL_APPLICATION_ID_KEYS)
+            if external_application_id:
+                scopes.append({"external_application_id": external_application_id})
+        return scopes
+
     def _list_deployment_conversations_for_scope(
         self,
         method: Callable[..., Any],
@@ -326,6 +414,11 @@ class AbacusService:
         variants = _scope_call_variants(scope)
         last_error: Exception | None = None
         for kwargs in variants:
+            kwargs = {
+                **kwargs,
+                "limit": 600,
+                "include_org_level_conversations": True,
+            }
             try:
                 raw_items = iter_paginated_results(
                     method,
@@ -381,6 +474,15 @@ def _is_unsupported_kwargs_error(exc: Exception) -> bool:
 
 def _extract_next_token(response: Any) -> Any:
     return first_present(response, NEXT_TOKEN_KEYS)
+
+
+def _extract_text_value(raw: Any, keys: tuple[str, ...]) -> str | None:
+    plain = to_plain_data(raw)
+    value = first_present(plain, keys)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _normalize_chat_item(
@@ -446,6 +548,69 @@ def _merge_conversation_scopes(
     for scope in scopes:
         unique[tuple(sorted(scope.items()))] = scope
     return list(unique.values())
+
+
+def _dedupe_scopes(scopes: list[dict[str, str]]) -> list[dict[str, str]]:
+    unique: dict[tuple[tuple[str, str], ...], dict[str, str]] = {}
+    for scope in scopes:
+        cleaned = {key: str(value) for key, value in scope.items() if key in SCOPE_PARAM_VARIANTS and value}
+        if cleaned:
+            unique[tuple(sorted(cleaned.items()))] = cleaned
+    return list(unique.values())
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
+def _scope_summary_from_scopes(scopes: list[dict[str, str]]) -> dict[str, list[str]]:
+    summary = {
+        "deployment_ids": [],
+        "external_application_ids": [],
+        "conversation_types": [],
+    }
+    for scope in scopes:
+        if scope.get("deployment_id") and scope["deployment_id"] not in summary["deployment_ids"]:
+            summary["deployment_ids"].append(scope["deployment_id"])
+        if scope.get("external_application_id") and scope["external_application_id"] not in summary["external_application_ids"]:
+            summary["external_application_ids"].append(scope["external_application_id"])
+        if scope.get("conversation_type") and scope["conversation_type"] not in summary["conversation_types"]:
+            summary["conversation_types"].append(scope["conversation_type"])
+    return summary
+
+
+def _deployment_conversation_type_values() -> list[str]:
+    try:
+        from abacusai.api_class.enums import DeploymentConversationType
+
+        return [str(getattr(member, "value", member)).strip() for member in DeploymentConversationType if str(getattr(member, "value", member)).strip()]
+    except Exception:
+        return [
+            "CHATLLM",
+            "SIMPLE_AGENT",
+            "COMPLEX_AGENT",
+            "WORKFLOW_AGENT",
+            "COPILOT",
+            "AGENT_CONTROLLER",
+            "CODE_LLM",
+            "CODE_LLM_AGENT",
+            "CODE_LLM_COWORK",
+            "CHAT_LLM_TASK",
+            "COMPUTER_AGENT",
+            "SEARCH_LLM",
+            "APP_LLM",
+            "TEST_AGENT",
+            "SUPER_AGENT",
+            "CODE_LLM_NON_INTERACTIVE",
+            "BROWSER_EXTENSION",
+            "OFFICE",
+        ]
 
 
 def _scope_call_variants(scope: dict[str, str]) -> list[dict[str, Any]]:

@@ -27,7 +27,7 @@ This project was built for a simple need: keep local, inspectable backups of Aba
 - **Official SDK only** - Uses `from abacusai import ApiClient`.
 - **No scraping** - No browser automation, Selenium, Playwright, cookies, or password login.
 - **Chat discovery** - Loads AI chat sessions and deployment conversations where the SDK/account allows it.
-- **Deployment conversation scopes** - Configure deployment IDs, external application IDs, or conversation types in the UI.
+- **Deployment conversation scopes** - Automatically discovers deployment/external application scopes where the SDK allows it; manual overrides are available in the UI.
 - **Multi-select export** - Select individual chats or export everything.
 - **Export formats** - JSON, Markdown, HTML, and optional ZIP archive.
 - **Backup history** - View manifests, download ZIPs, and delete local backups.
@@ -149,11 +149,18 @@ API keys are never returned to the frontend. If entered in the UI, the key is ke
 /data/secrets/abacus_api_key.local
 ```
 
-### 2. Configure Deployment Conversation Scopes
+### 2. Deployment Conversation Scopes
+
+The app automatically tries to discover scopes through the official SDK:
+
+- `list_projects`
+- `list_deployments`
+- `list_external_applications`
+- SDK conversation type enum fallback
 
 Some Abacus SDK/account setups require at least one scope for `list_deployment_conversations`. The official Abacus documentation lists `deploymentId`, `externalApplicationId`, and `conversationType` for `listDeploymentConversations`; in the Python SDK these are called as `deployment_id`, `external_application_id`, and `conversation_type`.
 
-In the UI, go to **Einstellungen** and enter one or more values in:
+If autodiscovery is not enough, go to **Einstellungen** and enter one or more manual values in:
 
 - Deployment IDs
 - External Application IDs
@@ -300,9 +307,9 @@ APP_BASIC_AUTH_PASSWORD=a-long-local-password
 
 ## Troubleshooting
 
-### "Deployment Conversations wurden uebersprungen"
+### "Deployment Conversations konnten nicht geladen werden"
 
-The SDK requires a supported conversation scope. Add at least one value in **Einstellungen**: Deployment ID, External Application ID, or Conversation Type.
+Autodiscovery and manual scopes did not yield a usable SDK scope. Add at least one value in **Einstellungen**: Deployment ID, External Application ID, or Conversation Type.
 
 ### "Nicht verbunden"
 
