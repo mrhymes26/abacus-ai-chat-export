@@ -1,0 +1,195 @@
+from __future__ import annotations
+
+import threading
+from pathlib import Path
+from typing import Any
+
+from .abacus_client import AbacusService
+from .config import get_settings
+from .database import Database
+from .exporters import (
+    create_backup_zip,
+    extract_messages_to_markdown,
+    write_export_result,
+    write_json,
+    write_markdown,
+)
+from .local_settings import merge_scope_summaries, read_conversation_scopes, summary_to_query_scopes
+from .models import APP_NAME, ChatItem, ExportRequest
+from .security import safe_error
+from .utils import ensure_dir, now_utc_iso, relative_posix, safe_filename, short_id
+
+
+def run_backup_job(
+    job_id: str,
+    request: ExportRequest,
+    abacus_service: AbacusService,
+    data_dir: str | Path,
+    cancel_event: threading.Event | None = None,
+) -> None:
+    data_root = Path(data_dir)
+    db = Database(data_root / "app.db")
+    db.init()
+    created_at = now_utc_iso()
+    backup_id = f"abacus_{created_at[:19].replace(':', '-').replace('T', '_')}_{short_id(job_id)}"
+    backup_dir = data_root / "backups" / backup_id
+    ai_dir = backup_dir / "ai_chat_sessions"
+    deployment_dir = backup_dir / "deployment_conversations"
+    errors: list[str] = []
+    manifest_items: list[dict[str, Any]] = []
+
+    try:
+        ensure_dir(ai_dir)
+        ensure_dir(deployment_dir)
+        errors_log = backup_dir / "errors.log"
+        errors_log.write_text("", encoding="utf-8")
+        db.update_job(job_id, status="running", current_item="Chats werden geladen")
+
+        items = _resolve_items(request, abacus_service)
+        db.update_job(job_id, total=len(items), done=0, failed=0)
+
+        done = 0
+        failed = 0
+        for item in items:
+            if cancel_event and cancel_event.is_set():
+                break
+            db.update_job(job_id, current_item=f"{item.type}:{item.id}")
+            item_files: list[Path] = []
+            item_errors: list[str] = []
+            path_base = _path_base_for_item(item, ai_dir if item.type == "ai_chat" else deployment_dir)
+            detail: Any = item.raw_preview or {}
+
+            try:
+                detail = abacus_service.get_chat_detail(item)
+            except Exception as exc:
+                item_errors.append(f"{item.type}:{item.id}: Detailabruf fehlgeschlagen: {safe_error(exc)}")
+
+            if "json" in request.formats:
+                try:
+                    item_files.append(write_json(path_base.with_suffix(".json"), detail))
+                except Exception as exc:
+                    item_errors.append(f"{item.type}:{item.id}: JSON-Export fehlgeschlagen: {safe_error(exc)}")
+
+            if "markdown" in request.formats:
+                try:
+                    markdown = extract_messages_to_markdown(detail, item.title, item.type, item.id)
+                    item_files.append(write_markdown(path_base.with_suffix(".md"), markdown))
+                except Exception as exc:
+                    item_errors.append(f"{item.type}:{item.id}: Markdown-Export fehlgeschlagen: {safe_error(exc)}")
+
+            if "html" in request.formats:
+                try:
+                    export_result = abacus_service.export_chat_html(item)
+                    item_files.extend(write_export_result(export_result, path_base.with_name(path_base.name + "_html_export")))
+                except AttributeError as exc:
+                    item_errors.append(f"{item.type}:{item.id}: HTML-Export nicht verfügbar: {safe_error(exc)}")
+                except Exception as exc:
+                    item_errors.append(f"{item.type}:{item.id}: HTML-Export fehlgeschlagen: {safe_error(exc)}")
+
+            if not item_files:
+                failed += 1
+            errors.extend(item_errors)
+            manifest_items.append(
+                {
+                    "id": item.id,
+                    "type": item.type,
+                    "deployment_id": item.deployment_id,
+                    "title": item.title,
+                    "files": [relative_posix(path, backup_dir) for path in item_files],
+                    "errors": item_errors,
+                }
+            )
+            done += 1
+            db.update_job(job_id, done=done, failed=failed, errors_json=errors)
+
+        final_status = "cancelled" if cancel_event and cancel_event.is_set() else "completed"
+        counts = _manifest_counts(manifest_items)
+        counts["total"] = len(items)
+        counts["processed"] = done
+        counts["failed"] = failed
+        manifest = {
+            "backup_id": backup_id,
+            "created_at": created_at,
+            "app": APP_NAME,
+            "request": request.model_dump(mode="json"),
+            "counts": counts,
+            "items": manifest_items,
+            "errors": errors,
+        }
+        write_json(backup_dir / "manifest.json", manifest)
+        errors_log.write_text("\n".join(errors) + ("\n" if errors else ""), encoding="utf-8")
+
+        zip_path: Path | None = None
+        if request.zip:
+            zip_path = create_backup_zip(backup_dir)
+
+        db.insert_backup(
+            backup_id=backup_id,
+            created_at=created_at,
+            path=str(backup_dir),
+            zip_path=str(zip_path) if zip_path else None,
+            manifest=manifest,
+        )
+        result = {
+            "backup_id": backup_id,
+            "backup_path": str(backup_dir),
+            "zip_path": str(zip_path) if zip_path else None,
+            "download_url": f"/api/backups/{backup_id}/download",
+        }
+        db.update_job(job_id, status=final_status, current_item=None, result_json=result, errors_json=errors)
+    except Exception as exc:
+        errors.append(f"Backup-Job konnte nicht gestartet oder abgeschlossen werden: {safe_error(exc)}")
+        db.update_job(job_id, status="failed", current_item=None, errors_json=errors)
+
+
+def _resolve_items(request: ExportRequest, abacus_service: AbacusService) -> list[ChatItem]:
+    include_ai = "ai_chat" in request.types
+    include_deployments = "deployment_conversation" in request.types
+    settings = get_settings()
+    stored_scope_summary = read_conversation_scopes(settings.conversation_scopes_file).model_dump(mode="json")
+    merged_scope_summary = merge_scope_summaries(settings.conversation_scope_summary, stored_scope_summary)
+    items = abacus_service.list_all_chats(
+        include_ai_chat=include_ai,
+        include_deployments=include_deployments,
+        deployment_ids=request.deployment_ids or settings.deployment_ids or None,
+        conversation_scopes=_request_conversation_scopes(request) or summary_to_query_scopes(merged_scope_summary),
+    )
+    if request.mode == "all":
+        return [item for item in items if item.exportable]
+
+    wanted = set(request.chat_ids)
+    if not wanted:
+        return []
+    selected: list[ChatItem] = []
+    for item in items:
+        keys = {
+            item.id,
+            f"{item.type}:{item.id}",
+            f"{item.type}:{item.deployment_id or ''}:{item.id}",
+        }
+        if wanted.intersection(keys) and item.exportable:
+            selected.append(item)
+    return selected
+
+
+def _request_conversation_scopes(request: ExportRequest) -> list[dict[str, str]]:
+    scopes: list[dict[str, str]] = []
+    scopes.extend({"deployment_id": value} for value in request.deployment_ids if value)
+    scopes.extend({"external_application_id": value} for value in request.external_application_ids if value)
+    scopes.extend({"conversation_type": value} for value in request.conversation_types if value)
+    return scopes
+
+
+def _path_base_for_item(item: ChatItem, directory: Path) -> Path:
+    title = item.title or item.id
+    filename = f"{safe_filename(title, fallback=item.type)}_{short_id(item.id)}"
+    return directory / filename
+
+
+def _manifest_counts(items: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {"ai_chat": 0, "deployment_conversation": 0}
+    for item in items:
+        item_type = item.get("type")
+        if item_type in counts:
+            counts[item_type] += 1
+    return counts

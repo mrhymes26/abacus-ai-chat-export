@@ -1,0 +1,27 @@
+services:
+  abacus-backup-manager:
+    build: .
+    container_name: abacus-backup-manager
+    ports:
+      - "8080:8080"
+    environment:
+      ABACUS_API_KEY: ${ABACUS_API_KEY:-}
+      ABACUS_DEPLOYMENT_IDS: ${ABACUS_DEPLOYMENT_IDS:-}
+      ABACUS_EXTERNAL_APPLICATION_IDS: ${ABACUS_EXTERNAL_APPLICATION_IDS:-}
+      ABACUS_CONVERSATION_TYPES: ${ABACUS_CONVERSATION_TYPES:-}
+      APP_DATA_DIR: /data
+      APP_ALLOW_UI_API_KEY: ${APP_ALLOW_UI_API_KEY:-true}
+      APP_ALLOW_PERSISTENT_API_KEY: ${APP_ALLOW_PERSISTENT_API_KEY:-true}
+      APP_BASIC_AUTH_USER: ${APP_BASIC_AUTH_USER:-}
+      APP_BASIC_AUTH_PASSWORD: ${APP_BASIC_AUTH_PASSWORD:-}
+    volumes:
+      - abacus_backup_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import base64, os, urllib.request; req=urllib.request.Request('http://127.0.0.1:8080/api/health'); u=os.getenv('APP_BASIC_AUTH_USER'); p=os.getenv('APP_BASIC_AUTH_PASSWORD'); req.add_header('Authorization', 'Basic ' + base64.b64encode(f'{u}:{p}'.encode()).decode()) if u and p else None; urllib.request.urlopen(req, timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  abacus_backup_data:
