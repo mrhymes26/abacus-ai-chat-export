@@ -63,6 +63,7 @@ DEFAULT_ITEM_KEYS = (
     "deploymentConversations",
 )
 NEXT_TOKEN_KEYS = ("next_page_token", "nextPageToken", "page_token", "pageToken")
+DETAIL_LIMIT = 5000
 SCOPE_PARAM_VARIANTS = {
     "deployment_id": ("deployment_id", "deploymentId"),
     "external_application_id": ("external_application_id", "externalApplicationId"),
@@ -319,11 +320,7 @@ class AbacusService:
                 "warning": "SDK-Methode get_deployment_conversation fehlt.",
             }
         method = getattr(client, "get_deployment_conversation")
-        response = try_call_variants(
-            method,
-            _deployment_conversation_variants(chat_item),
-        )
-        return to_plain_data(response)
+        return self._get_full_deployment_conversation_detail(method, chat_item)
 
     def export_chat_html(self, chat_item: ChatItem) -> ExportResult:
         client = self._require_client()
@@ -350,6 +347,26 @@ class AbacusService:
                 _deployment_conversation_variants(chat_item),
             )
         return ExportResult(ok=True, data=response)
+
+    def _get_full_deployment_conversation_detail(
+        self,
+        method: Callable[..., Any],
+        chat_item: ChatItem,
+    ) -> dict[str, Any]:
+        variants = _deployment_conversation_detail_variants(chat_item)
+        response = try_call_variants(method, variants)
+        detail = to_plain_data(response)
+        if isinstance(detail, dict):
+            detail.setdefault("_abacus_backup_fetch", {})
+            fetch_meta = detail["_abacus_backup_fetch"]
+            if isinstance(fetch_meta, dict):
+                history = detail.get("history")
+                fetch_meta["requested_limit"] = DETAIL_LIMIT
+                fetch_meta["include_all_versions"] = True
+                fetch_meta["history_items"] = len(history) if isinstance(history, list) else None
+                fetch_meta["total_events"] = detail.get("total_events")
+                fetch_meta["complete_by_total_events"] = _history_complete_by_total_events(detail)
+        return detail if isinstance(detail, dict) else {"data": detail}
 
     def _discover_deployment_id_scopes(self, client: Any, warnings: list[str]) -> list[dict[str, str]]:
         if not hasattr(client, "list_projects") or not hasattr(client, "list_deployments"):
@@ -648,6 +665,32 @@ def _deployment_conversation_variants(chat_item: ChatItem) -> list[dict[str, Any
             variants.append({key: value for key, value in merged.items() if value is not None})
     variants.extend(id_variants)
     return variants
+
+
+def _deployment_conversation_detail_variants(chat_item: ChatItem) -> list[dict[str, Any]]:
+    detail_options = [
+        {"limit": DETAIL_LIMIT, "include_all_versions": True},
+        {"limit": DETAIL_LIMIT},
+        {"include_all_versions": True},
+        {},
+    ]
+    variants: list[dict[str, Any]] = []
+    for base in _deployment_conversation_variants(chat_item):
+        for option in detail_options:
+            variants.append({**base, **option})
+    return variants
+
+
+def _history_complete_by_total_events(detail: dict[str, Any]) -> bool | None:
+    history = detail.get("history")
+    total_events = detail.get("total_events")
+    if not isinstance(history, list) or total_events is None:
+        return None
+    try:
+        # Abacus total_events can exclude one visible seed/user entry; allow an off-by-one.
+        return len(history) >= int(total_events)
+    except (TypeError, ValueError):
+        return None
 
 
 def _scope_variants_from_item(chat_item: ChatItem) -> list[dict[str, Any]]:

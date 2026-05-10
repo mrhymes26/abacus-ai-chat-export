@@ -1,4 +1,4 @@
-import { Archive, FileCode2, FileJson, FileText, PackageCheck } from "lucide-react";
+import { Archive, FileCode2, FileJson, FileText, PackageCheck, Upload } from "lucide-react";
 import { useState } from "react";
 import type { ExportFormat, ExportMode } from "../types";
 
@@ -11,7 +11,8 @@ interface ExportPanelProps {
 const formatOptions: Array<{ value: ExportFormat; label: string; icon: typeof FileJson }> = [
   { value: "json", label: "JSON", icon: FileJson },
   { value: "markdown", label: "Markdown", icon: FileText },
-  { value: "html", label: "HTML", icon: FileCode2 }
+  { value: "html", label: "HTML", icon: FileCode2 },
+  { value: "openwebui", label: "Open WebUI", icon: Upload }
 ];
 
 export default function ExportPanel({ selectedCount, busy, onStart }: ExportPanelProps) {
@@ -54,6 +55,11 @@ export default function ExportPanel({ selectedCount, busy, onStart }: ExportPane
           <strong>PDF speichern oder Druck</strong> im Browser vorbereitet (Drucklayout A4, Hinweis in der Datei). Sind mehrere Formate aktiv, kommen zusätzlich die gewählten Dateien und weiterhin{" "}
           <span className="font-mono text-xs">*_Konversation.html</span> sowie bei Bedarf der SDK-Roh-Export unter{" "}
           <span className="font-mono text-xs">*_html.*</span>.
+        </p>
+        <p className="mt-2 text-zinc-600">
+          <strong>Open WebUI</strong> erzeugt zusätzlich importierbare JSON-Dateien im Open-WebUI-Chatformat:
+          pro Chat eine Einzeldatei und im Backup-Ordner <span className="font-mono text-xs">openwebui_import.json</span>{" "}
+          als Sammelimport.
         </p>
       </div>
 

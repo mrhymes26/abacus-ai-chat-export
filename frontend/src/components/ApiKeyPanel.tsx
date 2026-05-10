@@ -53,7 +53,7 @@ export default function ApiKeyPanel({ status, connection, onConnect, onForgetSto
   }
 
   return (
-    <section id="connection" className="border border-zinc-200 bg-white p-5 shadow-sm">
+    <section id="connection-settings" className="border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex items-center gap-2">

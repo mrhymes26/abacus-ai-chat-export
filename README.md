@@ -31,7 +31,7 @@ This project was built for a simple need: keep local, inspectable backups of Aba
 - **Chat discovery** - Loads AI chat sessions and deployment conversations where the SDK/account allows it.
 - **Deployment conversation scopes** - Automatically discovers deployment/external application scopes where the SDK allows it; manual overrides are available in the UI.
 - **Multi-select export** - Select individual chats or export everything.
-- **Export formats** - JSON, Markdown, HTML, and optional ZIP archive.
+- **Export formats** - JSON, Markdown, HTML, Open WebUI import JSON, and optional ZIP archive.
 - **Backup history** - View manifests, download ZIPs, and delete local backups.
 - **Persistent local storage** - SQLite metadata and backup files live under `/data`.
 - **Local API-key persistence** - Optional, clearly marked local storage under `/data/secrets`.
@@ -183,7 +183,7 @@ Long lists show the first **10** rows by default; use **Weitere … anzeigen** t
 ### 4. Select and Export
 
 1. Select individual chats or choose **Alle exportieren** (all exportable chats from the loaded list, independent of checkboxes).
-2. Choose export formats: JSON, Markdown, HTML.
+2. Choose export formats: JSON, Markdown, HTML, Open WebUI.
 3. **ZIP erstellen**: when enabled, the server writes per-chat files first, then builds `backup.zip` at the **end** of the job (same folder contents, not a second export). When disabled, only loose files are written; the backup download endpoint can still create the ZIP on first download if needed.
 4. Start the export and watch job progress.
 
@@ -227,6 +227,15 @@ If you select **only HTML** as export format (JSON/Markdown unchecked), each cha
 Files are written next to the other formats with a `*_html` stem: raw HTML (or text/binary when the response is not HTML) uses a normal extension (e.g. `.html`, `.txt`, `.bin`). When the SDK returns a structured object, the main document is `*_html.html` if HTML is embedded in the payload, and a sidecar `*_html.meta.json` holds the full structured response (not a misleading `*.export.json` name).
 
 Each backup folder also contains **`index.html`** at the root: an overview page with links to every exported file (and to `manifest.json` / `errors.log`). Open it in a browser after unzipping — relative links work offline.
+
+### Open WebUI
+
+Best when you want to import Abacus.AI conversations into Open WebUI. The exporter creates:
+
+- one `*_openwebui.json` file per converted chat
+- one root-level `openwebui_import.json` containing all successfully converted chats from the backup job
+
+`openwebui_import.json` follows Open WebUI's documented chat import shape: a JSON array, each item with `chat.history.messages`, `chat.history.currentId`, and `user` / `assistant` roles. If a chat payload does not expose recognizable text messages, the job records a conversion warning for that item and still keeps the JSON backup as source of truth.
 
 ### ZIP
 

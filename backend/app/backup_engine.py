@@ -8,13 +8,16 @@ from .abacus_client import AbacusService
 from .config import get_settings
 from .database import Database
 from .exporters import (
+    conversation_export_stats,
     create_backup_zip,
     extract_messages_to_markdown,
+    to_openwebui_chat,
     write_backup_index_html,
     write_conversation_readout_html,
     write_export_result,
     write_json,
     write_markdown,
+    write_openwebui_import,
 )
 from .local_settings import merge_scope_summaries, read_conversation_scopes, summary_to_query_scopes
 from .models import APP_NAME, ChatItem, ExportRequest
@@ -39,6 +42,7 @@ def run_backup_job(
     deployment_dir = backup_dir / "deployment_conversations"
     errors: list[str] = []
     manifest_items: list[dict[str, Any]] = []
+    openwebui_chats: list[dict[str, Any]] = []
 
     try:
         ensure_dir(ai_dir)
@@ -65,6 +69,12 @@ def run_backup_job(
                 detail = abacus_service.get_chat_detail(item)
             except Exception as exc:
                 item_errors.append(f"{item.type}:{item.id}: Detailabruf fehlgeschlagen: {safe_error(exc)}")
+            export_stats = conversation_export_stats(detail)
+            if export_stats.get("complete_by_total_events") is False:
+                item_errors.append(
+                    f"{item.type}:{item.id}: Verlauf moeglicherweise unvollstaendig "
+                    f"(history_items={export_stats.get('history_items')}, total_events={export_stats.get('total_events')})."
+                )
 
             if "json" in request.formats:
                 try:
@@ -78,6 +88,25 @@ def run_backup_job(
                     item_files.append(write_markdown(path_base.with_suffix(".md"), markdown))
                 except Exception as exc:
                     item_errors.append(f"{item.type}:{item.id}: Markdown-Export fehlgeschlagen: {safe_error(exc)}")
+
+            if "openwebui" in request.formats:
+                try:
+                    openwebui_chat = to_openwebui_chat(
+                        detail,
+                        title=item.title,
+                        source_type=item.type,
+                        source_id=item.id,
+                        deployment_id=item.deployment_id,
+                    )
+                    openwebui_chats.append(openwebui_chat)
+                    item_files.append(
+                        write_openwebui_import(
+                            path_base.with_name(path_base.name + "_openwebui.json"),
+                            [openwebui_chat],
+                        )
+                    )
+                except Exception as exc:
+                    item_errors.append(f"{item.type}:{item.id}: Open-WebUI-Konvertierung fehlgeschlagen: {safe_error(exc)}")
 
             if "html" in request.formats:
                 # Nur Format „HTML“: ein einziges druckfähiges Konversationsdokument — ohne SDK-Roh-Export
@@ -115,6 +144,7 @@ def run_backup_job(
                     "deployment_id": item.deployment_id,
                     "title": item.title,
                     "files": [relative_posix(path, backup_dir) for path in item_files],
+                    "export_stats": export_stats,
                     "errors": item_errors,
                 }
             )
@@ -136,6 +166,10 @@ def run_backup_job(
             "errors": errors,
             "index_html": "index.html",
         }
+        if "openwebui" in request.formats and openwebui_chats:
+            openwebui_path = write_openwebui_import(backup_dir / "openwebui_import.json", openwebui_chats)
+            manifest["openwebui_import"] = relative_posix(openwebui_path, backup_dir)
+            manifest["counts"]["openwebui_chats"] = len(openwebui_chats)
         write_json(backup_dir / "manifest.json", manifest)
         errors_log.write_text("\n".join(errors) + ("\n" if errors else ""), encoding="utf-8")
         write_backup_index_html(manifest, backup_dir)

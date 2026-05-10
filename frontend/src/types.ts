@@ -1,5 +1,5 @@
 export type ChatType = "ai_chat" | "deployment_conversation";
-export type ExportFormat = "json" | "html" | "markdown";
+export type ExportFormat = "json" | "html" | "markdown" | "openwebui";
 export type ExportMode = "selected" | "all";
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 

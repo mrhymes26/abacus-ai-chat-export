@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import html
 import json
 import zipfile
@@ -11,7 +12,7 @@ from urllib.parse import quote
 
 from .models import ExportResult
 from .security import redact_secrets, redact_secrets_from_text
-from .utils import ensure_dir, safe_json_dumps
+from .utils import ensure_dir, first_present, safe_json_dumps
 
 
 MESSAGE_LIST_KEYS = {
@@ -114,6 +115,131 @@ def extract_messages_to_markdown(data: Any, title: str | None, source_type: str,
     return redact_secrets_from_text("\n".join(lines).rstrip() + "\n")
 
 
+def conversation_export_stats(data: Any) -> dict[str, Any]:
+    plain = to_plain_data(data)
+    messages = _best_message_list(plain)
+    history = plain.get("history") if isinstance(plain, dict) else None
+    total_events = plain.get("total_events") if isinstance(plain, dict) else None
+    fetch_meta = plain.get("_abacus_backup_fetch") if isinstance(plain, dict) else None
+    stats = {
+        "extracted_messages": len(messages),
+        "history_items": len(history) if isinstance(history, list) else None,
+        "total_events": total_events,
+        "complete_by_total_events": None,
+        "fetch": fetch_meta if isinstance(fetch_meta, dict) else None,
+    }
+    if isinstance(history, list) and total_events is not None:
+        try:
+            stats["complete_by_total_events"] = len(history) >= int(total_events)
+        except (TypeError, ValueError):
+            pass
+    return stats
+
+
+def to_openwebui_chat(
+    data: Any,
+    *,
+    title: str | None,
+    source_type: str,
+    source_id: str,
+    deployment_id: str | None = None,
+) -> dict[str, Any]:
+    plain = to_plain_data(data)
+    message_list = _best_message_list(plain)
+    if not message_list:
+        raise ValueError("Keine Nachrichten fuer Open-WebUI-Konvertierung extrahierbar.")
+
+    chat_messages: dict[str, dict[str, Any]] = {}
+    ordered_ids: list[str] = []
+    models: list[str] = []
+
+    for index, message in enumerate(message_list):
+        if not isinstance(message, dict):
+            continue
+        content = _content_value(message).strip()
+        if not content:
+            continue
+
+        raw_role = _string_value(_first_key(message, ROLE_KEYS)) or "assistant"
+        role = _openwebui_role(raw_role)
+        normalized_role = _normalize_role(raw_role)
+        if role == "assistant" and normalized_role not in {"Assistant", "User"}:
+            content = f"[{normalized_role}]\n{content}"
+
+        msg_id = _openwebui_message_id(source_id, index, role, content)
+        parent_id = ordered_ids[-1] if ordered_ids else None
+        if parent_id:
+            chat_messages[parent_id]["childrenIds"] = [msg_id]
+
+        timestamp = _unix_timestamp(_first_key(message, TIME_KEYS))
+        model = _message_model(message)
+        if model and model not in models:
+            models.append(model)
+
+        entry: dict[str, Any] = {
+            "id": msg_id,
+            "parentId": parent_id,
+            "childrenIds": [],
+            "role": role,
+            "content": content,
+        }
+        if timestamp is not None:
+            entry["timestamp"] = timestamp
+        if role == "assistant":
+            entry["done"] = True
+            if model:
+                entry["model"] = model
+
+        chat_messages[msg_id] = entry
+        ordered_ids.append(msg_id)
+
+    if not ordered_ids:
+        raise ValueError("Keine textbasierten Nachrichten fuer Open-WebUI-Konvertierung extrahierbar.")
+
+    created_at = _unix_timestamp(first_present(plain, ("created_at", "createdAt", "created", "timestamp"))) if isinstance(plain, dict) else None
+    updated_at = _unix_timestamp(
+        first_present(plain, ("updated_at", "updatedAt", "last_event_created_at", "lastEventCreatedAt", "timestamp"))
+    ) if isinstance(plain, dict) else None
+    if created_at is None:
+        created_at = min((msg.get("timestamp") for msg in chat_messages.values() if isinstance(msg.get("timestamp"), int)), default=None)
+    if updated_at is None:
+        updated_at = max((msg.get("timestamp") for msg in chat_messages.values() if isinstance(msg.get("timestamp"), int)), default=created_at)
+
+    tags = ["abacus-ai", source_type]
+    if deployment_id:
+        tags.append("deployment")
+
+    return {
+        "chat": {
+            "title": title or source_id or "Abacus Conversation",
+            "models": models,
+            "history": {
+                "currentId": ordered_ids[-1],
+                "messages": chat_messages,
+            },
+            "options": {},
+        },
+        "meta": {
+            "tags": tags,
+            "source": "abacus-ai",
+            "source_type": source_type,
+            "source_id": source_id,
+            "deployment_id": deployment_id,
+        },
+        "pinned": False,
+        "folder_id": None,
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
+
+
+def write_openwebui_import(path: str | Path, chats: list[dict[str, Any]]) -> Path:
+    file_path = Path(path)
+    ensure_dir(file_path.parent)
+    file_path.write_text(safe_json_dumps(redact_secrets(chats)), encoding="utf-8")
+    return file_path
+
+
 def write_markdown(path: str | Path, markdown: str) -> Path:
     file_path = Path(path)
     ensure_dir(file_path.parent)
@@ -131,7 +257,7 @@ def write_conversation_readout_html(
     deployment_id: str | None = None,
     conversation_only_export: bool = False,
 ) -> Path:
-    """Lesbare Konversationsansicht: Rollen (Benutzer / Assistent), Zeitstempel; inkl. Druck/PDF-Styles."""
+    """Lesbare Konversationsansicht im Messenger-Stil mit links/rechts Bubbles und Druck/PDF-Styles."""
     file_path = Path(path)
     ensure_dir(file_path.parent)
 
@@ -163,66 +289,70 @@ def write_conversation_readout_html(
         '<meta name="color-scheme" content="light"/>',
         f"<title>{esc('Konversation')} — {esc(heading)}</title>",
         "<style>",
-        ":root { --user-bg:#ecfdf5; --user-accent:#047857; --asst-bg:#f4f4f5; --asst-accent:#52525b; --muted:#71717a; }",
+        ":root { --wa-green:#075e54; --wa-green-2:#128c7e; --wa-user:#dcf8c6; --wa-peer:#ffffff; --wa-bg:#e5ddd5; --text:#111b21; --muted:#667781; --line:#d1d7db; }",
         "* { box-sizing: border-box; }",
-        "body { font-family: system-ui, Segoe UI, Roboto, sans-serif; margin: 0; background: #fafafa; color: #18181b; line-height: 1.55; }",
-        ".wrap { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 2rem; }",
-        "header.page { margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid #e4e4e7; }",
-        "h1 { font-size: 1.25rem; margin: 0 0 0.35rem; font-weight: 700; }",
-        ".sub { font-size: 0.9rem; color: var(--muted); margin: 0 0 0.5rem; }",
-        ".legend { display: flex; flex-wrap: wrap; gap: 0.75rem; font-size: 0.78rem; margin-top: 0.75rem; }",
-        ".legend span { display: inline-flex; align-items: center; gap: 0.35rem; }",
-        ".dot { width: 0.55rem; height: 0.55rem; border-radius: 999px; }",
-        ".dot-user { background: var(--user-accent); }",
-        ".dot-asst { background: var(--asst-accent); }",
-        ".dot-sys { background: #a1a1aa; }",
-        ".thread { margin-top: 1rem; }",
-        ".turn { margin-bottom: 1rem; }",
-        ".meta-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 0.75rem; margin-bottom: 0.35rem; }",
-        ".who { font-weight: 700; font-size: 0.82rem; letter-spacing: 0.02em; }",
-        ".who-user { color: var(--user-accent); }",
-        ".who-assistant { color: #27272a; }",
-        ".who-system { color: #71717a; }",
-        ".who-other { color: #3f3f46; }",
-        "time { font-size: 0.72rem; color: var(--muted); }",
-        ".bubble { padding: 0.65rem 0.85rem; border-radius: 0.5rem; white-space: pre-wrap; word-break: break-word; font-size: 0.95rem; }",
-        ".turn-user .bubble { background: var(--user-bg); border-left: 4px solid var(--user-accent); margin-right: 8%; }",
-        ".turn-assistant .bubble { background: var(--asst-bg); border-left: 4px solid var(--asst-accent); margin-left: 8%; }",
-        ".turn-system .bubble { background: #fafafa; border: 1px dashed #d4d4d8; font-size: 0.85rem; color: #52525b; }",
-        ".turn-other .bubble { background: #fff; border: 1px solid #e4e4e7; }",
-        ".empty { padding: 1rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: 0.35rem; font-size: 0.9rem; color: #92400e; }",
-        "footer.note { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e4e4e7; font-size: 0.75rem; color: var(--muted); }",
-        ".screen-only { font-size: 0.8rem; color: var(--muted); margin: 0.75rem 0 0; }",
+        "body { font-family: system-ui, Segoe UI, Roboto, sans-serif; margin: 0; background: #d8d7d2; color: var(--text); line-height: 1.45; }",
+        ".wrap { max-width: 860px; margin: 0 auto; padding: 1.25rem 1rem 2rem; }",
+        ".phone { overflow: hidden; border: 1px solid #c9cfcc; background: var(--wa-bg); box-shadow: 0 10px 32px rgba(17,27,33,.12); }",
+        ".chat-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: .75rem; min-height: 4rem; padding: .65rem .9rem; background: linear-gradient(90deg,var(--wa-green),var(--wa-green-2)); color: #fff; }",
+        ".avatar { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; flex: none; border-radius: 999px; background: rgba(255,255,255,.22); font-weight: 800; }",
+        ".title { min-width: 0; flex: 1; }",
+        "h1 { overflow: hidden; margin: 0; font-size: 1rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }",
+        ".sub { overflow: hidden; margin: .12rem 0 0; color: rgba(255,255,255,.82); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }",
+        ".thread { min-height: 62vh; padding: 1rem .8rem 1.25rem; background-color: var(--wa-bg); background-image: radial-gradient(circle at 12px 12px, rgba(255,255,255,.23) 1.4px, transparent 1.4px), radial-gradient(circle at 38px 32px, rgba(7,94,84,.08) 1.1px, transparent 1.1px); background-size: 52px 52px; }",
+        ".message-row { display: flex; margin: .28rem 0; }",
+        ".msg-user { justify-content: flex-end; }",
+        ".msg-assistant, .msg-other { justify-content: flex-start; }",
+        ".msg-system { justify-content: center; }",
+        ".bubble { position: relative; max-width: min(78%, 44rem); padding: .45rem .62rem .35rem; border-radius: .48rem; box-shadow: 0 1px .5px rgba(17,27,33,.18); white-space: pre-wrap; word-break: break-word; font-size: .94rem; }",
+        ".msg-user .bubble { background: var(--wa-user); border-top-right-radius: .12rem; }",
+        ".msg-assistant .bubble, .msg-other .bubble { background: var(--wa-peer); border-top-left-radius: .12rem; }",
+        ".msg-user .bubble::after { content: ''; position: absolute; right: -.45rem; top: 0; width: 0; height: 0; border-top: .45rem solid var(--wa-user); border-right: .45rem solid transparent; }",
+        ".msg-assistant .bubble::before, .msg-other .bubble::before { content: ''; position: absolute; left: -.45rem; top: 0; width: 0; height: 0; border-top: .45rem solid var(--wa-peer); border-left: .45rem solid transparent; }",
+        ".msg-system .bubble { max-width: 72%; background: rgba(255,255,255,.76); color: var(--muted); text-align: center; font-size: .78rem; border-radius: .55rem; box-shadow: none; }",
+        ".sender { display: block; margin: 0 0 .18rem; color: var(--wa-green); font-size: .73rem; font-weight: 700; }",
+        ".msg-user .sender { color: #356b28; text-align: right; }",
+        ".stamp { float: right; margin: .25rem 0 0 .6rem; color: var(--muted); font-size: .68rem; line-height: 1.1; white-space: nowrap; }",
+        ".empty { margin: 1rem auto; max-width: 34rem; padding: .8rem 1rem; background: rgba(255,255,255,.86); border-radius: .55rem; color: #92400e; font-size: .9rem; text-align: center; }",
+        "footer.note { padding: .8rem 1rem; background: #f0f2f5; border-top: 1px solid var(--line); color: var(--muted); font-size: .72rem; }",
+        ".screen-only { margin: .75rem 0 0; color: rgba(255,255,255,.72); font-size: .75rem; }",
+        ".phone > .screen-only { display: none; }",
         "@media print {",
         "  .screen-only { display: none !important; }",
         "  @page { size: A4; margin: 12mm 14mm; }",
-        "  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }",
+        "  * { -webkit-print-color-adjust: economy; print-color-adjust: economy; box-shadow: none !important; }",
         "  body { background: #fff !important; color: #111 !important; }",
         "  .wrap { max-width: none; margin: 0; padding: 0; }",
-        "  header.page { margin-bottom: 8mm; padding-bottom: 5mm; border-bottom: 1pt solid #ccc; }",
+        "  .phone { border: 0; background: #fff !important; box-shadow: none; }",
+        "  .chat-header { position: static; min-height: auto; padding: 0 0 5mm; background: #fff !important; color: #111 !important; border-bottom: 1pt solid #bbb; }",
+        "  .avatar { display: none !important; }",
         "  h1 { font-size: 14pt; page-break-after: avoid; }",
-        "  .sub { font-size: 10pt; }",
-        "  .legend { font-size: 8pt; margin-top: 4mm; }",
-        "  .thread { margin-top: 5mm; }",
-        "  article.turn { break-inside: avoid; page-break-inside: avoid; margin-bottom: 4mm; }",
-        "  .meta-row { margin-bottom: 2mm; }",
-        "  .bubble { font-size: 10pt; line-height: 1.45; padding: 3mm 4mm; border-radius: 2mm; }",
-        "  .turn-user .bubble { margin-right: 12%; border-left-width: 3pt; }",
-        "  .turn-assistant .bubble { margin-left: 12%; border-left-width: 3pt; }",
-        "  footer.note { margin-top: 8mm; padding-top: 4mm; border-top: 1pt solid #ccc; font-size: 8pt; }",
-        "  time { font-size: 8pt; }",
+        "  .sub { color: #444 !important; font-size: 9pt; white-space: normal; }",
+        "  .thread { min-height: auto; padding: 5mm 0; background: #fff !important; background-image: none !important; }",
+        "  .message-row { break-inside: avoid; page-break-inside: avoid; margin: 0 0 3.5mm; }",
+        "  .msg-user { justify-content: flex-end; }",
+        "  .msg-assistant, .msg-other { justify-content: flex-start; }",
+        "  .bubble { max-width: 82%; background: #fff !important; border: 1pt solid #bbb; border-radius: 2mm; color: #111 !important; font-size: 10pt; line-height: 1.42; padding: 2.5mm 3.5mm; }",
+        "  .msg-user .bubble { border-left: 4pt solid #555; border-top-right-radius: 2mm; }",
+        "  .msg-assistant .bubble, .msg-other .bubble { border-left: 4pt solid #999; border-top-left-radius: 2mm; }",
+        "  .msg-system .bubble { max-width: 90%; border-style: dashed; text-align: center; }",
+        "  .msg-user .bubble::after, .msg-assistant .bubble::before, .msg-other .bubble::before { display: none !important; }",
+        "  .sender { color: #111 !important; font-size: 8pt; text-transform: uppercase; letter-spacing: .02em; }",
+        "  .msg-user .sender { text-align: right; }",
+        "  .stamp { color: #555 !important; font-size: 7pt; }",
+        "  footer.note { background: #fff !important; border-top: 1pt solid #bbb; color: #444 !important; font-size: 8pt; }",
         "}",
         "</style>",
         "</head>",
         "<body>",
         '<div class="wrap">',
-        '<header class="page">',
+        '<section class="phone">',
+        '<header class="chat-header">',
+        f'<div class="avatar">{esc(_initials(heading))}</div>',
+        '<div class="title">',
         f"<h1>{esc(heading)}</h1>",
         f'<p class="sub">{esc(type_hint)}</p>',
-        '<div class="legend">',
-        '<span><i class="dot dot-user"></i> Du / Benutzer</span>',
-        '<span><i class="dot dot-asst"></i> Assistent</span>',
-        '<span><i class="dot dot-sys"></i> System</span>',
+        '<p class="screen-only">PDF oder Druck: <strong>Strg+P</strong> (Mac: Cmd+P) - als PDF speichern oder Drucker waehlen.</p>',
         "</div>",
         "</header>",
         '<p class="screen-only">PDF oder Druck: <strong>Strg+P</strong> (Mac: ⌘+P) → „Als PDF speichern“ oder Drucker wählen. '
@@ -250,16 +380,13 @@ def write_conversation_readout_html(
             content = _content_value(message)
             timestamp = _string_value(_first_key(message, TIME_KEYS))
             raw_hint = raw_role if raw_role.lower() != normalized.lower() else ""
-            parts.append(f'<article class="turn {ui_class}">')
-            parts.append('<div class="meta-row">')
-            parts.append(f'<span class="who who-{ui_class.replace("turn-", "")}">{esc(label_de)}</span>')
-            if timestamp:
-                parts.append(f"<time>{esc(timestamp)}</time>")
-            if raw_hint and label_de != raw_hint:
-                parts.append(f'<span style="font-size:0.72rem;color:var(--muted)">({esc(raw_hint)})</span>')
-            parts.append("</div>")
+            sender = label_de if not raw_hint or label_de == raw_hint else f"{label_de} ({raw_hint})"
+            parts.append(f'<article class="message-row {ui_class}">')
             if content:
-                parts.append(f'<div class="bubble">{esc(content)}</div>')
+                parts.append(f'<div class="bubble"><span class="sender">{esc(sender)}</span>{esc(content)}')
+                if timestamp:
+                    parts.append(f'<span class="stamp">{esc(timestamp)}</span>')
+                parts.append("</div>")
             else:
                 parts.append('<div class="bubble"><em>Kein Textinhalt.</em></div>')
             parts.append("</article>")
@@ -276,6 +403,7 @@ def write_conversation_readout_html(
         )
         + "</footer>"
     )
+    parts.append("</section>")
     parts.append("</div></body></html>")
 
     file_path.write_text(redact_secrets_from_text("\n".join(parts)), encoding="utf-8")
@@ -284,12 +412,19 @@ def write_conversation_readout_html(
 
 def _role_ui_class(normalized: str) -> str:
     if normalized == "User":
-        return "turn-user"
+        return "msg-user"
     if normalized == "Assistant":
-        return "turn-assistant"
+        return "msg-assistant"
     if normalized == "System":
-        return "turn-system"
-    return "turn-other"
+        return "msg-system"
+    return "msg-other"
+
+
+def _initials(value: str | None) -> str:
+    words = [part for part in str(value or "Chat").replace("_", " ").split() if part]
+    if not words:
+        return "C"
+    return "".join(word[0].upper() for word in words[:2])[:2]
 
 
 def _role_label_de(normalized: str) -> str:
@@ -300,6 +435,60 @@ def _role_label_de(normalized: str) -> str:
         "Message": "Nachricht",
     }
     return mapping.get(normalized, normalized)
+
+
+def _openwebui_role(raw_role: str) -> str:
+    normalized = _normalize_role(raw_role)
+    return "user" if normalized == "User" else "assistant"
+
+
+def _openwebui_message_id(source_id: str, index: int, role: str, content: str) -> str:
+    digest = hashlib.sha256(f"{source_id}:{index}:{role}:{content[:200]}".encode("utf-8")).hexdigest()[:16]
+    return f"abacus-{index + 1}-{digest}"
+
+
+def _unix_timestamp(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        if number > 10_000_000_000:
+            number = number / 1000
+        return int(number)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if text.isdigit():
+            number = float(text)
+            if number > 10_000_000_000:
+                number = number / 1000
+            return int(number)
+        normalized = text.replace("Z", "+00:00")
+        return int(datetime.fromisoformat(normalized).timestamp())
+    except Exception:
+        return None
+
+
+def _message_model(message: dict[str, Any]) -> str | None:
+    value = first_present(
+        message,
+        (
+            "model",
+            "model_id",
+            "modelId",
+            "model_version",
+            "modelVersion",
+            "llm_model",
+            "llmModel",
+        ),
+    )
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        value = first_present(value, ("name", "id", "model", "model_id", "modelId"))
+    text = str(value).strip()
+    return text or None
 
 
 def write_export_result(result: Any, path_base: str | Path) -> list[Path]:

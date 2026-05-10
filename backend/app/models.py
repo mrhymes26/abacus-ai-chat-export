@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 APP_NAME = "Abacus Backup Chat Export Manager"
 
 ChatType = Literal["ai_chat", "deployment_conversation"]
-ExportFormat = Literal["json", "html", "markdown"]
+ExportFormat = Literal["json", "html", "markdown", "openwebui"]
 ExportMode = Literal["selected", "all"]
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 

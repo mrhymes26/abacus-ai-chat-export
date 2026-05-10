@@ -20,7 +20,7 @@ import ConnectionStatus from "./components/ConnectionStatus";
 import ConversationScopesPanel from "./components/ConversationScopesPanel";
 import ExportPanel from "./components/ExportPanel";
 import JobProgress from "./components/JobProgress";
-import Layout from "./components/Layout";
+import Layout, { AppView } from "./components/Layout";
 import Toast from "./components/Toast";
 import type {
   BackupJob,
@@ -47,6 +47,7 @@ export default function App() {
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [loadingChats, setLoadingChats] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [activeView, setActiveView] = useState<AppView>("chats");
 
   const addToast = useCallback((type: ToastMessage["type"], message: string) => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -176,33 +177,51 @@ export default function App() {
 
   return (
     <>
-      <Layout status={status}>
+      <Layout status={status} activeView={activeView} onViewChange={setActiveView}>
         <div className="border border-zinc-200 bg-white p-4 shadow-sm lg:hidden">
           <p className="text-sm font-semibold uppercase text-emerald-700">Abacus Backup</p>
           <h1 className="mt-1 text-2xl font-semibold">Chat Export Manager</h1>
         </div>
 
-        <ApiKeyPanel
-          status={status}
-          connection={connection}
-          onConnect={handleConnect}
-          onForgetStoredKey={handleForgetStoredKey}
-        />
-        <ConnectionStatus status={status} connection={connection} />
-        <ChatTable
-          items={chats}
-          warnings={chatWarnings}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-          onLoad={() => void loadChats(false)}
-          onRefresh={() => void loadChats(true)}
-          loading={loadingChats}
-        />
-        <ExportPanel selectedCount={selectedCount} busy={exporting} onStart={handleStartExport} />
-        <JobProgress job={job} onCancel={handleCancel} />
-        <BackupHistory backups={backups} onRefresh={() => void refreshBackups()} onManifest={getManifest} onDelete={handleDeleteBackup} />
+        {activeView === "chats" && (
+          <>
+            <ChatTable
+              items={chats}
+              warnings={chatWarnings}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              onLoad={() => void loadChats(false)}
+              onRefresh={() => void loadChats(true)}
+              loading={loadingChats}
+            />
+            <ExportPanel selectedCount={selectedCount} busy={exporting} onStart={handleStartExport} />
+            <JobProgress job={job} onCancel={handleCancel} />
+          </>
+        )}
 
-        <ConversationScopesPanel status={status} scopes={conversationScopes} onSave={handleSaveConversationScopes} />
+        {activeView === "backups" && (
+          <BackupHistory backups={backups} onRefresh={() => void refreshBackups()} onManifest={getManifest} onDelete={handleDeleteBackup} />
+        )}
+
+        {activeView === "settings" && (
+          <section id="settings" className="grid gap-6">
+            <div className="border border-zinc-200 bg-white p-5 shadow-sm">
+              <p className="text-sm font-semibold uppercase text-emerald-700">Einstellungen</p>
+              <h2 className="mt-1 text-xl font-semibold">Verbindung und Scopes</h2>
+              <p className="mt-2 text-sm text-zinc-600">
+                API-Key, SDK-Status und Conversation-Scopes sind hier gebündelt, damit die Arbeitsansicht kompakt bleibt.
+              </p>
+            </div>
+            <ApiKeyPanel
+              status={status}
+              connection={connection}
+              onConnect={handleConnect}
+              onForgetStoredKey={handleForgetStoredKey}
+            />
+            <ConnectionStatus status={status} connection={connection} />
+            <ConversationScopesPanel status={status} scopes={conversationScopes} onSave={handleSaveConversationScopes} />
+          </section>
+        )}
       </Layout>
       <Toast messages={toasts} onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
     </>
