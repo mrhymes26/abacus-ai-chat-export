@@ -4,12 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **API timeout handling:** Each `get_chat_detail` and `export_chat_html` SDK call has a 120-second timeout. If the Abacus API does not respond in time, the item is skipped and the job continues with the next chat.
+- **Timeout UI warning:** The job progress panel shows a prominent amber warning when items are skipped due to API timeout, so users know immediately without checking the error log.
+
 ### Documentation
 
 - **README:** Clarifies English UI/API copy vs. legacy `_Konversation` transcript filename suffix; HTML export section rewritten for clarity.
 - **README:** Project structure updated to include all backend modules (`config.py`, `security.py`, `local_settings.py`, `utils.py`) and complete frontend `src/` tree.
 - **README:** Technical Details lists exact dependency version ranges from `requirements.txt` (`fastapi>=0.115`, `uvicorn>=0.30`, `pydantic>=2.7`, `abacusai>=1.4`).
 - **README:** API Endpoints table documents query parameters for `GET /api/chats`.
+- **README:** UI preview mockup screenshot added.
 
 ## [1.0.0] — 2026-05-08
 

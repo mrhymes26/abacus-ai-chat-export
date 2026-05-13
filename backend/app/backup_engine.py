@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import concurrent.futures
 import threading
 from pathlib import Path
 from typing import Any
+
+DETAIL_TIMEOUT_SECONDS = 120
 
 from .abacus_client import AbacusService
 from .config import get_settings
@@ -66,7 +69,14 @@ def run_backup_job(
             detail: Any = item.raw_preview or {}
 
             try:
-                detail = abacus_service.get_chat_detail(item)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(abacus_service.get_chat_detail, item)
+                    detail = future.result(timeout=DETAIL_TIMEOUT_SECONDS)
+            except concurrent.futures.TimeoutError:
+                item_errors.append(
+                    f"{item.type}:{item.id}: Failed to fetch detail: "
+                    f"Timeout after {DETAIL_TIMEOUT_SECONDS}s — skipping this item."
+                )
             except Exception as exc:
                 item_errors.append(f"{item.type}:{item.id}: Failed to fetch detail: {safe_error(exc)}")
             export_stats = conversation_export_stats(detail)
@@ -113,8 +123,14 @@ def run_backup_job(
                 conversation_only = set(request.formats) == {"html"}
                 if not conversation_only:
                     try:
-                        export_result = abacus_service.export_chat_html(item)
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                            future = pool.submit(abacus_service.export_chat_html, item)
+                            export_result = future.result(timeout=DETAIL_TIMEOUT_SECONDS)
                         item_files.extend(write_export_result(export_result, path_base.with_name(path_base.name + "_html")))
+                    except concurrent.futures.TimeoutError:
+                        item_errors.append(
+                            f"{item.type}:{item.id}: HTML export timed out after {DETAIL_TIMEOUT_SECONDS}s — skipped."
+                        )
                     except AttributeError as exc:
                         item_errors.append(f"{item.type}:{item.id}: HTML export not available: {safe_error(exc)}")
                     except Exception as exc:

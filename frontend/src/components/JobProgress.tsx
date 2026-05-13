@@ -1,4 +1,4 @@
-import { Download, Loader2, OctagonX } from "lucide-react";
+import { AlertTriangle, Download, Loader2, OctagonX } from "lucide-react";
 import { useState } from "react";
 import type { BackupJob } from "../types";
 
@@ -11,6 +11,9 @@ export default function JobProgress({ job, onCancel }: JobProgressProps) {
   const [showErrors, setShowErrors] = useState(false);
   if (!job) return null;
   const active = job.status === "queued" || job.status === "running";
+
+  const timeoutErrors = job.errors.filter((e) => /timeout/i.test(e) || /timed out/i.test(e));
+  const skippedCount = timeoutErrors.length;
 
   return (
     <section className="border border-zinc-200 bg-white p-5 shadow-sm">
@@ -41,6 +44,22 @@ export default function JobProgress({ job, onCancel }: JobProgressProps) {
           <Loader2 className="h-4 w-4 animate-spin" />
           {job.current_item}
         </p>
+      )}
+
+      {skippedCount > 0 && (
+        <div className="mt-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-amber-600" />
+          <div className="text-sm text-amber-900">
+            <p className="font-semibold">
+              {skippedCount} item{skippedCount > 1 ? "s" : ""} skipped due to API timeout
+            </p>
+            <p className="mt-1 text-amber-700">
+              The Abacus API did not respond within the time limit for{" "}
+              {skippedCount === 1 ? "this chat" : "these chats"}. They were skipped so the rest of the
+              backup can continue. You can retry later or check the error log for details.
+            </p>
+          </div>
+        </div>
       )}
 
       {job.errors.length > 0 && (
