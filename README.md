@@ -45,13 +45,17 @@ This project was built for a simple need: keep local, inspectable backups of Aba
 
 ## Screenshots
 
-No screenshots are included yet. After running the app, open:
+![Abacus Backup Chat Export Manager — Chats view](docs/preview-ui.png)
+
+*Example mockup — the actual UI may differ slightly.*
+
+The main view shows the chat table with filters, multi-select, pagination, and the export panel (format toggles, mode, ZIP option). Navigation via the sidebar: **Chats**, **Backups**, **Settings**.
+
+After running the app, open:
 
 ```text
 http://localhost:8080
 ```
-
-The UI contains connection status, chat table, export controls, job progress, backup history, and settings for deployment conversation scopes.
 
 ## Requirements
 
