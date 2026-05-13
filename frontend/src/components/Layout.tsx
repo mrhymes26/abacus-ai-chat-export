@@ -1,11 +1,9 @@
 import { Archive, Coffee, MessageSquare, Settings } from "lucide-react";
 import type { ReactNode } from "react";
-import type { StatusResponse } from "../types";
 
 export type AppView = "chats" | "backups" | "settings";
 
 interface LayoutProps {
-  status: StatusResponse | null;
   activeView: AppView;
   onViewChange: (view: AppView) => void;
   children: ReactNode;
@@ -14,12 +12,12 @@ interface LayoutProps {
 const navItems = [
   { label: "Chats", view: "chats" as const, icon: MessageSquare },
   { label: "Backups", view: "backups" as const, icon: Archive },
-  { label: "Einstellungen", view: "settings" as const, icon: Settings }
+  { label: "Settings", view: "settings" as const, icon: Settings }
 ];
 
 const supportUrl = "https://buymeacoffee.com/mrhymes";
 
-export default function Layout({ status, activeView, onViewChange, children }: LayoutProps) {
+export default function Layout({ activeView, onViewChange, children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-stone-100 text-zinc-900">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r border-zinc-200 bg-white lg:block">
@@ -48,13 +46,11 @@ export default function Layout({ status, activeView, onViewChange, children }: L
             })}
           </nav>
           <div className="border-t border-zinc-200 px-6 py-5 text-sm text-zinc-600">
-            <p className="font-medium text-zinc-900">Speicherort</p>
-            <p className="mt-1 break-all">{status?.data_dir || "/data"}</p>
             <a
               href={supportUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md bg-amber-300 px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-amber-200"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-amber-300 px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-amber-200"
             >
               <Coffee className="h-4 w-4" />
               Buy Me a Coffee

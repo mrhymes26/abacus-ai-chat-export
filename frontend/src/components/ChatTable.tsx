@@ -1,5 +1,5 @@
-import { ArrowDownUp, CheckSquare, ChevronDown, ChevronUp, RefreshCw, Search, Square } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowDownUp, CheckSquare, ChevronLeft, ChevronRight, RefreshCw, Search, Square } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type { ChatItem } from "../types";
 
 interface ChatTableProps {
@@ -15,7 +15,8 @@ interface ChatTableProps {
 type Filter = "all" | "ai_chat" | "deployment_conversation";
 type SortKey = "title" | "date" | "type";
 
-const INITIAL_TABLE_ROWS = 10;
+const PAGE_SIZE_OPTIONS = [10, 50, 100] as const;
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 
 export function chatSelectionKey(item: ChatItem): string {
   return `${item.type}:${item.deployment_id || ""}:${item.id}`;
@@ -33,7 +34,8 @@ export default function ChatTable({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("date");
-  const [tableExpanded, setTableExpanded] = useState(false);
+  const [pageSize, setPageSize] = useState<PageSize>(10);
+  const [pageIndex, setPageIndex] = useState(0);
 
   const visibleItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -52,9 +54,20 @@ export default function ChatTable({
       });
   }, [filter, items, query, sortKey]);
 
-  const hasLongList = visibleItems.length > INITIAL_TABLE_ROWS;
-  const shownItems = tableExpanded || !hasLongList ? visibleItems : visibleItems.slice(0, INITIAL_TABLE_ROWS);
-  const hiddenCount = hasLongList ? visibleItems.length - INITIAL_TABLE_ROWS : 0;
+  const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize));
+  const safePageIndex = Math.min(pageIndex, totalPages - 1);
+  const rangeStart = visibleItems.length === 0 ? 0 : safePageIndex * pageSize + 1;
+  const rangeEnd = visibleItems.length === 0 ? 0 : Math.min(visibleItems.length, (safePageIndex + 1) * pageSize);
+  const shownItems = visibleItems.slice(safePageIndex * pageSize, (safePageIndex + 1) * pageSize);
+  const needsPagination = visibleItems.length > pageSize;
+
+  useEffect(() => {
+    setPageIndex((i) => Math.min(i, Math.max(0, totalPages - 1)));
+  }, [totalPages]);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [query, filter, sortKey, visibleItems.length]);
 
   function toggleItem(item: ChatItem) {
     const next = new Set(selectedIds);
@@ -79,12 +92,12 @@ export default function ChatTable({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Chats</h2>
-          <p className="mt-1 text-sm text-zinc-600">{items.length} Einträge geladen, {selectedIds.size} ausgewählt</p>
+          <p className="mt-1 text-sm text-zinc-600">{items.length} rows loaded, {selectedIds.size} selected</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={onLoad} disabled={loading} className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-60">
             <Search className="h-4 w-4" />
-            Chats laden
+            Load chats
           </button>
           <button onClick={onRefresh} disabled={loading} className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-60">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -92,11 +105,11 @@ export default function ChatTable({
           </button>
           <button onClick={selectVisible} className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-50">
             <CheckSquare className="h-4 w-4" />
-            Alle auswählen
+            Select all
           </button>
           <button onClick={clearSelection} className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-50">
             <Square className="h-4 w-4" />
-            Auswahl aufheben
+            Clear selection
           </button>
         </div>
       </div>
@@ -113,25 +126,27 @@ export default function ChatTable({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Suche nach Titel, ID, Deployment"
+            placeholder="Search title, ID, deployment"
             className="min-h-10 w-full rounded-md border border-zinc-300 pl-9 pr-3 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
           />
         </div>
         <select value={filter} onChange={(event) => setFilter(event.target.value as Filter)} className="min-h-10 rounded-md border border-zinc-300 px-3 text-sm">
-          <option value="all">Alle</option>
-          <option value="ai_chat">AI Chat</option>
-          <option value="deployment_conversation">Deployment Conversations</option>
+          <option value="all">All</option>
+          <option value="ai_chat">AI chat</option>
+          <option value="deployment_conversation">Deployment conversations</option>
         </select>
         <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)} className="min-h-10 rounded-md border border-zinc-300 px-3 text-sm">
-          <option value="date">Datum</option>
-          <option value="title">Titel</option>
-          <option value="type">Typ</option>
+          <option value="date">Date</option>
+          <option value="title">Title</option>
+          <option value="type">Type</option>
         </select>
       </div>
 
-      {hasLongList && !tableExpanded && (
+      {visibleItems.length > 0 && (
         <p className="mt-3 text-xs text-zinc-500">
-          Es werden die ersten {INITIAL_TABLE_ROWS} Zeilen angezeigt. „Alle auswählen“ bezieht sich auf alle {visibleItems.length} Einträge in dieser gefilterten Ansicht, nicht nur auf die sichtbaren Zeilen.
+          {needsPagination
+            ? `Showing rows ${rangeStart}–${rangeEnd} of ${visibleItems.length} (page ${safePageIndex + 1} of ${totalPages}, ${pageSize} per page). "Select all" applies to all ${visibleItems.length} rows in this filtered view, not only the visible page.`
+            : `Showing all ${visibleItems.length} rows in this view (up to ${pageSize} per page). "Select all" selects the entire filtered list.`}
         </p>
       )}
 
@@ -140,14 +155,14 @@ export default function ChatTable({
           <thead className="bg-zinc-50 text-left text-xs font-semibold uppercase text-zinc-600">
             <tr>
               <th className="w-12 px-3 py-3"></th>
-              <th className="px-3 py-3">Typ</th>
-              <th className="px-3 py-3">Titel</th>
+              <th className="px-3 py-3">Type</th>
+              <th className="px-3 py-3">Title</th>
               <th className="px-3 py-3">ID</th>
               <th className="px-3 py-3">Deployment ID</th>
               <th className="px-3 py-3">
-                <span className="inline-flex items-center gap-1"><ArrowDownUp className="h-3 w-3" />Datum</span>
+                <span className="inline-flex items-center gap-1"><ArrowDownUp className="h-3 w-3" />Date</span>
               </th>
-              <th className="px-3 py-3">Exportierbar</th>
+              <th className="px-3 py-3">Exportable</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 bg-white">
@@ -166,52 +181,76 @@ export default function ChatTable({
                   </td>
                   <td className="px-3 py-3">
                     <span className={`rounded-md px-2 py-1 text-xs font-semibold ${item.type === "ai_chat" ? "bg-emerald-50 text-emerald-800" : "bg-sky-50 text-sky-800"}`}>
-                      {item.type === "ai_chat" ? "AI Chat" : "Deployment"}
+                      {item.type === "ai_chat" ? "AI chat" : "Deployment"}
                     </span>
                   </td>
                   <td className="max-w-xs px-3 py-3 font-medium text-zinc-900">
-                    <span className="line-clamp-2">{item.title || "Ohne Titel"}</span>
+                    <span className="line-clamp-2">{item.title || "Untitled"}</span>
                   </td>
                   <td className="px-3 py-3 font-mono text-xs text-zinc-600" title={item.id}>{shorten(item.id)}</td>
                   <td className="px-3 py-3 font-mono text-xs text-zinc-600" title={item.deployment_id || ""}>{item.deployment_id ? shorten(item.deployment_id) : "-"}</td>
                   <td className="px-3 py-3 text-zinc-600">{formatDate(item.updated_at || item.created_at || item.last_event_created_at)}</td>
-                  <td className="px-3 py-3">{item.exportable ? "Ja" : "Nein"}</td>
+                  <td className="px-3 py-3">{item.exportable ? "Yes" : "No"}</td>
                 </tr>
               );
             })}
             {!visibleItems.length && (
               <tr>
                 <td colSpan={7} className="px-3 py-10 text-center text-zinc-500">
-                  Keine Chats in dieser Ansicht.
-                </td>
-              </tr>
-            )}
-            {hasLongList && (
-              <tr className="bg-zinc-50">
-                <td colSpan={7} className="px-3 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setTableExpanded((v) => !v)}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-                  >
-                    {tableExpanded ? (
-                      <>
-                        <ChevronUp className="h-4 w-4" />
-                        Liste einklappen (nur {INITIAL_TABLE_ROWS} Zeilen)
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="h-4 w-4" />
-                        Weitere {hiddenCount} Einträge anzeigen ({visibleItems.length} in dieser Ansicht)
-                      </>
-                    )}
-                  </button>
+                  No chats in this view.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {visibleItems.length > 0 && (
+        <div className="mt-3 flex flex-col gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <label className="flex items-center gap-2 text-sm text-zinc-700">
+            <span className="font-medium text-zinc-800">Rows per page</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value) as PageSize);
+                setPageIndex(0);
+              }}
+              className="min-h-9 rounded-md border border-zinc-300 bg-white px-2 text-sm"
+            >
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          {needsPagination && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={safePageIndex <= 0}
+                onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+                className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </button>
+              <span className="text-sm text-zinc-600">
+                Page {safePageIndex + 1} / {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={safePageIndex >= totalPages - 1}
+                onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
+                className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

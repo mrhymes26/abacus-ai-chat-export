@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 APP_NAME = "Abacus Backup Chat Export Manager"
+APP_VERSION = "1.0.0"
 
 ChatType = Literal["ai_chat", "deployment_conversation"]
 ExportFormat = Literal["json", "html", "markdown", "openwebui"]
@@ -132,6 +133,7 @@ class BackupManifest(BaseModel):
     backup_id: str
     created_at: str
     app: str = APP_NAME
+    app_version: str | None = None
     request: dict[str, Any] = Field(default_factory=dict)
     counts: dict[str, int] = Field(default_factory=dict)
     items: list[dict[str, Any]] = Field(default_factory=list)

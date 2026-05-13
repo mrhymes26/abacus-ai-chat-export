@@ -17,7 +17,7 @@ export default function Toast({ messages, onDismiss }: ToastProps) {
           <div key={toast.id} className={`flex items-start gap-3 rounded-md border p-3 shadow-sm ${tone}`}>
             <Icon className="mt-0.5 h-4 w-4 flex-none" />
             <p className="flex-1 text-sm font-medium">{toast.message}</p>
-            <button onClick={() => onDismiss(toast.id)} title="Schließen" className="rounded p-0.5 hover:bg-white/70">
+            <button onClick={() => onDismiss(toast.id)} title="Dismiss" className="rounded p-0.5 hover:bg-white/70">
               <X className="h-4 w-4" />
             </button>
           </div>

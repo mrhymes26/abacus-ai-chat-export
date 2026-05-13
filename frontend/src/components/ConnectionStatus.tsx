@@ -48,20 +48,20 @@ export default function ConnectionStatus({ status, connection }: ConnectionStatu
         </div>
         <p className="mt-2 text-sm text-zinc-600">{status?.connected ? "Connected" : "Not connected"}</p>
         <p className="mt-1 text-sm text-zinc-600">
-          Env API-Key: {status?.has_env_api_key ? "vorhanden" : "nicht gesetzt"}
+          Env API key: {status?.has_env_api_key ? "present" : "not set"}
         </p>
       </div>
       <div>
         <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
           <Server className="h-4 w-4" />
-          Conversation Scopes
+          Conversation scopes
         </div>
         <div className="mt-2 space-y-2">
           {scopeChips.length ? (
             <>
               {longScopeList && !scopesExpanded && (
                 <p className="text-xs text-zinc-500">
-                  Vorschau: {PREVIEW_SCOPE_CHIPS} von {scopeChips.length} Einträgen — alle Scopes ausklappen für die volle Liste.
+                  Preview: {PREVIEW_SCOPE_CHIPS} of {scopeChips.length} entries — expand to see the full list.
                 </p>
               )}
               <div
@@ -82,26 +82,26 @@ export default function ConnectionStatus({ status, connection }: ConnectionStatu
                   {scopesExpanded ? (
                     <>
                       <ChevronUp className="h-4 w-4 shrink-0" />
-                      Liste einklappen (nur {PREVIEW_SCOPE_CHIPS} Chips)
+                      Collapse list ({PREVIEW_SCOPE_CHIPS} chips)
                     </>
                   ) : (
                     <>
                       <ChevronDown className="h-4 w-4 shrink-0" />
-                      Weitere {hiddenScopeCount} Einträge anzeigen ({scopeChips.length} gesamt)
+                      Show {hiddenScopeCount} more ({scopeChips.length} total)
                     </>
                   )}
                 </button>
               )}
             </>
           ) : (
-            <span className="text-sm text-zinc-500">Keine gesetzt</span>
+            <span className="text-sm text-zinc-500">None configured</span>
           )}
         </div>
       </div>
       <div>
         <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
           <CircleAlert className="h-4 w-4" />
-          SDK-Methoden
+          SDK methods
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
           {methods.length ? (
@@ -111,10 +111,10 @@ export default function ConnectionStatus({ status, connection }: ConnectionStatu
               </span>
             ))
           ) : (
-            <span className="text-sm text-zinc-500">Noch nicht geprueft</span>
+            <span className="text-sm text-zinc-500">Not checked yet</span>
           )}
         </div>
-        {missing.length > 0 && <p className="mt-3 text-xs text-zinc-500">Fehlend: {missing.join(", ")}</p>}
+        {missing.length > 0 && <p className="mt-3 text-xs text-zinc-500">Missing: {missing.join(", ")}</p>}
       </div>
     </section>
   );

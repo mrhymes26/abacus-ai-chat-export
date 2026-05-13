@@ -35,37 +35,38 @@ export default function ExportPanel({ selectedCount, busy, onStart }: ExportPane
         <PackageCheck className="h-5 w-5 text-emerald-700" />
         <h2 className="text-lg font-semibold">Export</h2>
       </div>
-      <p className="mt-2 text-sm text-zinc-600">Backups enthalten vertrauliche Chat-Inhalte.</p>
+      <p className="mt-2 text-sm text-zinc-600">Backups contain confidential chat content.</p>
 
       <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
-        <p className="font-medium text-zinc-900">Ablauf</p>
+        <p className="font-medium text-zinc-900">How it works</p>
         <p className="mt-1">
-          Nach Klick auf Export startet ein <strong>Server-Job</strong>: Für jeden Chat werden die gewählten Formate als <strong>Einzeldateien</strong> in einen neuen Backup-Ordner geschrieben (zusätzlich <span className="font-mono text-xs">manifest.json</span> und ggf.{" "}
+          After you click export, a <strong>server job</strong> runs: for each chat, the selected formats are written as{" "}
+          <strong>separate files</strong> into a new backup folder (plus <span className="font-mono text-xs">manifest.json</span> and optionally{" "}
           <span className="font-mono text-xs">errors.log</span>).
         </p>
         <p className="mt-2">
-          Wenn <strong>ZIP erstellen</strong> aktiv ist, wird <strong>am Ende des Jobs</strong> eine Datei <span className="font-mono text-xs">backup.zip</span> im Backup-Ordner erzeugt. Die ZIP ist ein Archiv über dieselben Dateien (kein zusätzlicher Exportlauf). Ist die Option aus, werden nur Einzeldateien geschrieben; ein Klick auf <strong>Download</strong> in der Historie erzeugt die ZIP bei Bedarf beim ersten Abruf nachträglich.
+          If <strong>Create ZIP</strong> is enabled, a <span className="font-mono text-xs">backup.zip</span> file is built
+          <strong> at the end of the job</strong> in the backup folder. The ZIP is an archive of the same files (no extra export pass). If the option is off, only individual files are written; a click on <strong>Download</strong> in the history creates the ZIP on first download if needed.
         </p>
         <p className="mt-2 text-zinc-600">
-          <strong>Alle exportieren</strong> verarbeitet alle <em>exportierbaren</em> Chats aus der geladenen Liste (unabhängig von Checkboxen). <strong>Auswahl exportieren</strong> nur die angehakten Zeilen.
+          <strong>Export all</strong> processes every <em>exportable</em> chat in the loaded list (regardless of checkboxes). <strong>Export selection</strong> only the checked rows.
         </p>
         <p className="mt-2 text-zinc-600">
-          <strong>Nur HTML</strong> aktivieren (andere Formate abwählen): Pro Chat nur eine Datei{" "}
-          <span className="font-mono text-xs">*_Konversation.html</span> — ohne SDK-Zusatzdateien, für{" "}
-          <strong>PDF speichern oder Druck</strong> im Browser vorbereitet (Drucklayout A4, Hinweis in der Datei). Sind mehrere Formate aktiv, kommen zusätzlich die gewählten Dateien und weiterhin{" "}
-          <span className="font-mono text-xs">*_Konversation.html</span> sowie bei Bedarf der SDK-Roh-Export unter{" "}
-          <span className="font-mono text-xs">*_html.*</span>.
+          Enable <strong>HTML only</strong> (deselect other formats): one file per chat{" "}
+          <span className="font-mono text-xs">*_Konversation.html</span> — no extra SDK artifacts, tuned for{" "}
+          <strong>Save as PDF or print</strong> in the browser (A4 print layout; note inside the file). With multiple formats, you also get the chosen files and still{" "}
+          <span className="font-mono text-xs">*_Konversation.html</span>, plus the raw SDK HTML export under{" "}
+          <span className="font-mono text-xs">*_html.*</span> when applicable.
         </p>
         <p className="mt-2 text-zinc-600">
-          <strong>Open WebUI</strong> erzeugt zusätzlich importierbare JSON-Dateien im Open-WebUI-Chatformat:
-          pro Chat eine Einzeldatei und im Backup-Ordner <span className="font-mono text-xs">openwebui_import.json</span>{" "}
-          als Sammelimport.
+          <strong>Open WebUI</strong> adds importable JSON in Open WebUI chat format: one file per chat and{" "}
+          <span className="font-mono text-xs">openwebui_import.json</span> in the backup folder for bulk import.
         </p>
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         <div>
-          <p className="text-sm font-semibold text-zinc-900">Formate</p>
+          <p className="text-sm font-semibold text-zinc-900">Formats</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {formatOptions.map((option) => {
               const Icon = option.icon;
@@ -86,27 +87,27 @@ export default function ExportPanel({ selectedCount, busy, onStart }: ExportPane
         </div>
 
         <div>
-          <p className="text-sm font-semibold text-zinc-900">Modus</p>
+          <p className="text-sm font-semibold text-zinc-900">Mode</p>
           <div className="mt-2 grid grid-cols-2 overflow-hidden rounded-md border border-zinc-300">
             <button
               type="button"
               onClick={() => setMode("selected")}
               className={`px-3 py-2 text-sm font-medium ${mode === "selected" ? "bg-zinc-950 text-white" : "bg-white text-zinc-700"}`}
             >
-              Auswahl exportieren
+              Export selection
             </button>
             <button
               type="button"
               onClick={() => setMode("all")}
               className={`px-3 py-2 text-sm font-medium ${mode === "all" ? "bg-zinc-950 text-white" : "bg-white text-zinc-700"}`}
             >
-              Alle exportieren
+              Export all
             </button>
           </div>
         </div>
 
         <div>
-          <p className="text-sm font-semibold text-zinc-900">Paket</p>
+          <p className="text-sm font-semibold text-zinc-900">Package</p>
           <label className="mt-2 inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm">
             <input
               type="checkbox"
@@ -115,7 +116,7 @@ export default function ExportPanel({ selectedCount, busy, onStart }: ExportPane
               className="h-4 w-4 rounded border-zinc-300 text-emerald-700"
             />
             <Archive className="h-4 w-4 text-zinc-600" />
-            ZIP erstellen
+            Create ZIP
           </label>
         </div>
       </div>
@@ -127,7 +128,7 @@ export default function ExportPanel({ selectedCount, busy, onStart }: ExportPane
         className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
       >
         <PackageCheck className="h-4 w-4" />
-        {mode === "all" ? "Alle exportieren" : "Ausgewählte exportieren"}
+        {mode === "all" ? "Export all" : "Export selected"}
       </button>
     </section>
   );

@@ -4,6 +4,7 @@ import base64
 import hashlib
 import html
 import json
+import re
 import zipfile
 from datetime import date, datetime
 from pathlib import Path
@@ -90,8 +91,8 @@ def extract_messages_to_markdown(data: Any, title: str | None, source_type: str,
     heading = title or source_id
     if not message_list:
         return (
-            "# Kein Markdown-Chatverlauf extrahierbar\n\n"
-            "Die Rohdaten wurden als JSON gespeichert.\n"
+            "# No markdown chat history could be extracted\n\n"
+            "Raw data was saved as JSON.\n"
         )
 
     lines = [
@@ -108,9 +109,10 @@ def extract_messages_to_markdown(data: Any, title: str | None, source_type: str,
         role_label = _normalize_role(role)
         lines.append(f"## {role_label}")
         if timestamp:
-            lines.append(f"Zeit: {timestamp}")
+            lines.append(f"Time: {timestamp}")
         lines.append("")
-        lines.append(content or "_Kein Textinhalt erkannt._")
+        body = _tidy_export_plaintext(content or "")
+        lines.append(body or "_No text content detected._")
         lines.append("")
     return redact_secrets_from_text("\n".join(lines).rstrip() + "\n")
 
@@ -147,7 +149,7 @@ def to_openwebui_chat(
     plain = to_plain_data(data)
     message_list = _best_message_list(plain)
     if not message_list:
-        raise ValueError("Keine Nachrichten fuer Open-WebUI-Konvertierung extrahierbar.")
+        raise ValueError("No messages could be extracted for Open WebUI conversion.")
 
     chat_messages: dict[str, dict[str, Any]] = {}
     ordered_ids: list[str] = []
@@ -156,7 +158,7 @@ def to_openwebui_chat(
     for index, message in enumerate(message_list):
         if not isinstance(message, dict):
             continue
-        content = _content_value(message).strip()
+        content = _tidy_export_plaintext(_content_value(message).strip())
         if not content:
             continue
 
@@ -194,7 +196,7 @@ def to_openwebui_chat(
         ordered_ids.append(msg_id)
 
     if not ordered_ids:
-        raise ValueError("Keine textbasierten Nachrichten fuer Open-WebUI-Konvertierung extrahierbar.")
+        raise ValueError("No text-based messages could be extracted for Open WebUI conversion.")
 
     created_at = _unix_timestamp(first_present(plain, ("created_at", "createdAt", "created", "timestamp"))) if isinstance(plain, dict) else None
     updated_at = _unix_timestamp(
@@ -257,7 +259,7 @@ def write_conversation_readout_html(
     deployment_id: str | None = None,
     conversation_only_export: bool = False,
 ) -> Path:
-    """Lesbare Konversationsansicht im Messenger-Stil mit links/rechts Bubbles und Druck/PDF-Styles."""
+    """Readable conversation view in a messenger layout with print/PDF-oriented styles."""
     file_path = Path(path)
     ensure_dir(file_path.parent)
 
@@ -270,24 +272,24 @@ def write_conversation_readout_html(
 
     type_hint = ""
     if source_type == "ai_chat":
-        type_hint = "Nachrichten zwischen dir (Benutzer) und dem KI-Assistenten."
+        type_hint = "Messages between you (user) and the AI assistant."
     elif source_type == "deployment_conversation":
         dep = deployment_id or "—"
         type_hint = (
-            f"Deployment-Konversation: Nutzer und Assistent im Kontext dieses Deployments "
-            f"(Deployment-ID: {dep})."
+            f"Deployment conversation: user and assistant in the context of this deployment "
+            f"(deployment ID: {dep})."
         )
     else:
-        type_hint = "Nachrichtenverlauf."
+        type_hint = "Message history."
 
     parts: list[str] = [
         "<!DOCTYPE html>",
-        '<html lang="de">',
+        '<html lang="en">',
         "<head>",
         '<meta charset="utf-8"/>',
         '<meta name="viewport" content="width=device-width, initial-scale=1"/>',
         '<meta name="color-scheme" content="light"/>',
-        f"<title>{esc('Konversation')} — {esc(heading)}</title>",
+        f"<title>{esc('Conversation')} — {esc(heading)}</title>",
         "<style>",
         ":root { --wa-green:#075e54; --wa-green-2:#128c7e; --wa-user:#dcf8c6; --wa-peer:#ffffff; --wa-bg:#e5ddd5; --text:#111b21; --muted:#667781; --line:#d1d7db; }",
         "* { box-sizing: border-box; }",
@@ -304,7 +306,28 @@ def write_conversation_readout_html(
         ".msg-user { justify-content: flex-end; }",
         ".msg-assistant, .msg-other { justify-content: flex-start; }",
         ".msg-system { justify-content: center; }",
-        ".bubble { position: relative; max-width: min(78%, 44rem); padding: .45rem .62rem .35rem; border-radius: .48rem; box-shadow: 0 1px .5px rgba(17,27,33,.18); white-space: pre-wrap; word-break: break-word; font-size: .94rem; }",
+        ".bubble { position: relative; max-width: min(78%, 44rem); min-width: 0; padding: .45rem .62rem .35rem; border-radius: .48rem; box-shadow: 0 1px .5px rgba(17,27,33,.18); overflow-wrap: break-word; word-break: normal; font-size: .94rem; line-height: 1.5; overflow-x: hidden; overflow-y: visible; }",
+        ".bubble .plain-body { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-width: 100%; }",
+        ".bubble .md-body { white-space: normal; min-width: 0; max-width: 100%; }",
+        ".bubble .md-body > *:first-child { margin-top: 0; }",
+        ".bubble .md-body .md-p { margin: 0.35rem 0; white-space: pre-line; overflow-wrap: break-word; }",
+        ".bubble .md-body .md-h { margin: 0.55rem 0 0.25rem; font-weight: 700; line-height: 1.25; color: #0f172a; }",
+        ".bubble .md-body h2.md-h { font-size: 1.05rem; }",
+        ".bubble .md-body h3.md-h { font-size: 0.98rem; }",
+        ".bubble .md-body h4.md-h, .bubble .md-body h5.md-h, .bubble .md-body h6.md-h { font-size: 0.9rem; }",
+        ".bubble .md-body .tool-label { display: block; margin: 0.45rem 0 0.15rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--wa-green-2); }",
+        ".bubble .md-body .md-quote { margin: 0.35rem 0 0.45rem; padding: 0.35rem 0.5rem; border-left: 3px solid var(--wa-green-2); background: #ecfdf5; border-radius: 0 0.35rem 0.35rem 0; font-size: 0.84rem; color: #14532d; }",
+        ".bubble .md-body .md-quote p { margin: 0; white-space: pre-line; overflow-wrap: break-word; }",
+        ".bubble .md-body .md-quote.routing { background: #f0fdf4; }",
+        ".bubble .md-body .md-list { margin: 0.35rem 0 0.45rem 1rem; padding-left: 0.35rem; }",
+        ".bubble .md-body .md-list li { margin: 0.18rem 0; overflow-wrap: break-word; word-break: normal; }",
+        ".bubble .md-body .md-table-wrap { margin: 0.45rem 0; overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }",
+        ".bubble .md-body table.md-table { border-collapse: collapse; width: 100%; font-size: 0.78rem; }",
+        ".bubble .md-body .md-table th, .bubble .md-body .md-table td { border: 1px solid var(--line); padding: 0.28rem 0.38rem; vertical-align: top; text-align: left; overflow-wrap: break-word; word-break: normal; hyphens: auto; }",
+        ".bubble .md-body .md-table th { background: #f4f4f5; font-weight: 600; }",
+        ".bubble .md-body .md-hr { margin: 0.45rem 0; border: 0; border-top: 1px solid var(--line); }",
+        ".bubble .md-body a { color: #0d9488; text-decoration: underline; text-underline-offset: 2px; }",
+        ".bubble .md-body .md-code { font-family: ui-monospace, Consolas, monospace; font-size: 0.82em; background: #f4f4f5; padding: 0.08rem 0.22rem; border-radius: 0.2rem; }",
         ".msg-user .bubble { background: var(--wa-user); border-top-right-radius: .12rem; }",
         ".msg-assistant .bubble, .msg-other .bubble { background: var(--wa-peer); border-top-left-radius: .12rem; }",
         ".msg-user .bubble::after { content: ''; position: absolute; right: -.45rem; top: 0; width: 0; height: 0; border-top: .45rem solid var(--wa-user); border-right: .45rem solid transparent; }",
@@ -312,7 +335,7 @@ def write_conversation_readout_html(
         ".msg-system .bubble { max-width: 72%; background: rgba(255,255,255,.76); color: var(--muted); text-align: center; font-size: .78rem; border-radius: .55rem; box-shadow: none; }",
         ".sender { display: block; margin: 0 0 .18rem; color: var(--wa-green); font-size: .73rem; font-weight: 700; }",
         ".msg-user .sender { color: #356b28; text-align: right; }",
-        ".stamp { float: right; margin: .25rem 0 0 .6rem; color: var(--muted); font-size: .68rem; line-height: 1.1; white-space: nowrap; }",
+        ".stamp { display: block; margin-top: .28rem; text-align: right; color: var(--muted); font-size: .68rem; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }",
         ".empty { margin: 1rem auto; max-width: 34rem; padding: .8rem 1rem; background: rgba(255,255,255,.86); border-radius: .55rem; color: #92400e; font-size: .9rem; text-align: center; }",
         "footer.note { padding: .8rem 1rem; background: #f0f2f5; border-top: 1px solid var(--line); color: var(--muted); font-size: .72rem; }",
         ".screen-only { margin: .75rem 0 0; color: rgba(255,255,255,.72); font-size: .75rem; }",
@@ -329,17 +352,28 @@ def write_conversation_readout_html(
         "  h1 { font-size: 14pt; page-break-after: avoid; }",
         "  .sub { color: #444 !important; font-size: 9pt; white-space: normal; }",
         "  .thread { min-height: auto; padding: 5mm 0; background: #fff !important; background-image: none !important; }",
-        "  .message-row { break-inside: avoid; page-break-inside: avoid; margin: 0 0 3.5mm; }",
+        "  .message-row { break-inside: auto; page-break-inside: auto; margin: 0 0 3.5mm; }",
         "  .msg-user { justify-content: flex-end; }",
         "  .msg-assistant, .msg-other { justify-content: flex-start; }",
-        "  .bubble { max-width: 82%; background: #fff !important; border: 1pt solid #bbb; border-radius: 2mm; color: #111 !important; font-size: 10pt; line-height: 1.42; padding: 2.5mm 3.5mm; }",
+        "  .bubble { break-inside: auto; page-break-inside: auto; line-height: 1.5; overflow-wrap: break-word; word-break: normal; hyphens: auto; overflow-x: hidden; }",
+        "  .bubble .plain-body { white-space: pre-wrap; overflow-wrap: anywhere; orphans: 2; widows: 2; }",
+        "  .bubble .md-body .md-p { white-space: pre-line; line-height: 1.52; orphans: 3; widows: 3; overflow-wrap: break-word; word-break: normal; hyphens: auto; }",
+        "  .bubble .md-body .md-quote p { white-space: pre-line; orphans: 2; widows: 2; }",
+        "  .bubble .md-body .md-list li { orphans: 2; widows: 2; break-inside: avoid; page-break-inside: avoid; }",
+        "  .bubble .md-body .md-table-wrap { break-inside: auto; }",
+        "  .bubble .md-body table.md-table { break-inside: auto; width: 100%; }",
+        "  .bubble .md-body .md-table thead { display: table-header-group; }",
+        "  .bubble .md-body .md-table tr { break-inside: avoid; page-break-inside: avoid; }",
+        "  .bubble .md-body .md-table th, .bubble .md-body .md-table td { font-size: 8pt; padding: 1.2mm 1.5mm; white-space: normal; overflow-wrap: break-word; word-break: normal; hyphens: auto; }",
+        "  .bubble .md-body .md-h { page-break-after: avoid; break-after: avoid; }",
+        "  .bubble .md-body .tool-label { page-break-after: avoid; break-after: avoid; }",
         "  .msg-user .bubble { border-left: 4pt solid #555; border-top-right-radius: 2mm; }",
         "  .msg-assistant .bubble, .msg-other .bubble { border-left: 4pt solid #999; border-top-left-radius: 2mm; }",
         "  .msg-system .bubble { max-width: 90%; border-style: dashed; text-align: center; }",
         "  .msg-user .bubble::after, .msg-assistant .bubble::before, .msg-other .bubble::before { display: none !important; }",
         "  .sender { color: #111 !important; font-size: 8pt; text-transform: uppercase; letter-spacing: .02em; }",
         "  .msg-user .sender { text-align: right; }",
-        "  .stamp { color: #555 !important; font-size: 7pt; }",
+        "  .stamp { float: none; color: #555 !important; font-size: 7pt; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }",
         "  footer.note { background: #fff !important; border-top: 1pt solid #bbb; color: #444 !important; font-size: 8pt; }",
         "}",
         "</style>",
@@ -352,22 +386,20 @@ def write_conversation_readout_html(
         '<div class="title">',
         f"<h1>{esc(heading)}</h1>",
         f'<p class="sub">{esc(type_hint)}</p>',
-        '<p class="screen-only">PDF oder Druck: <strong>Strg+P</strong> (Mac: Cmd+P) - als PDF speichern oder Drucker waehlen.</p>',
+        '<p class="screen-only">Print or PDF: <strong>Ctrl+P</strong> (Mac: <strong>Cmd+P</strong>) — save as PDF or choose a printer. This page is tuned for A4.</p>',
         "</div>",
         "</header>",
-        '<p class="screen-only">PDF oder Druck: <strong>Strg+P</strong> (Mac: ⌘+P) → „Als PDF speichern“ oder Drucker wählen. '
-        "Diese Seite ist für A4 optimiert.</p>",
         '<main class="thread">',
     ]
 
     if not messages:
         hint_tail = (
-            "Optional andere Exportformate wählen oder Rohdaten prüfen."
+            "Try other export formats or inspect the raw data."
             if conversation_only_export
-            else "Bitte die JSON-Datei oder den SDK-HTML-Export prüfen."
+            else "Check the JSON file or the SDK HTML export."
         )
         parts.append(
-            '<p class="empty">Aus den Rohdaten konnten keine einzelnen Nachrichten mit Rolle und Text erkannt werden. '
+            '<p class="empty">No individual messages with role and text could be detected from the raw data. '
             + esc(hint_tail)
             + "</p>"
         )
@@ -376,24 +408,26 @@ def write_conversation_readout_html(
             raw_role = _string_value(_first_key(message, ROLE_KEYS)) or "message"
             normalized = _normalize_role(raw_role)
             ui_class = _role_ui_class(normalized)
-            label_de = _role_label_de(normalized)
+            label_ui = _role_display_label(normalized)
             content = _content_value(message)
             timestamp = _string_value(_first_key(message, TIME_KEYS))
             raw_hint = raw_role if raw_role.lower() != normalized.lower() else ""
-            sender = label_de if not raw_hint or label_de == raw_hint else f"{label_de} ({raw_hint})"
+            sender = label_ui if not raw_hint or label_ui == raw_hint else f"{label_ui} ({raw_hint})"
             parts.append(f'<article class="message-row {ui_class}">')
             if content:
-                parts.append(f'<div class="bubble"><span class="sender">{esc(sender)}</span>{esc(content)}')
+                rich = normalized == "Assistant"
+                inner = _message_body_html_for_export(content, rich_markdown=rich)
+                parts.append(f'<div class="bubble"><span class="sender">{esc(sender)}</span>{inner}')
                 if timestamp:
                     parts.append(f'<span class="stamp">{esc(timestamp)}</span>')
                 parts.append("</div>")
             else:
-                parts.append('<div class="bubble"><em>Kein Textinhalt.</em></div>')
+                parts.append('<div class="bubble"><em>No text content.</em></div>')
             parts.append("</article>")
 
     parts.append("</main>")
     parts.append(
-        '<footer class="note">Technische IDs — Chat: <code>'
+        '<footer class="note">Technical IDs — chat: <code>'
         + esc(source_id)
         + "</code>"
         + (
@@ -427,12 +461,12 @@ def _initials(value: str | None) -> str:
     return "".join(word[0].upper() for word in words[:2])[:2]
 
 
-def _role_label_de(normalized: str) -> str:
+def _role_display_label(normalized: str) -> str:
     mapping = {
-        "User": "Du / Benutzer",
-        "Assistant": "Assistent",
+        "User": "You / user",
+        "Assistant": "Assistant",
         "System": "System",
-        "Message": "Nachricht",
+        "Message": "Message",
     }
     return mapping.get(normalized, normalized)
 
@@ -550,6 +584,10 @@ def write_backup_index_html(
     backup_id = manifest.get("backup_id") or ""
     created = esc(manifest.get("created_at") or "")
     app_name = esc(manifest.get("app") or "")
+    app_version = manifest.get("app_version")
+    app_line = app_name
+    if app_version:
+        app_line += f' · Version <code>{esc(app_version)}</code>'
     counts = manifest.get("counts") or {}
     req = manifest.get("request") or {}
     formats = req.get("formats") or []
@@ -559,7 +597,7 @@ def write_backup_index_html(
 
     lines: list[str] = [
         "<!DOCTYPE html>",
-        '<html lang="de">',
+        '<html lang="en">',
         "<head>",
         '<meta charset="utf-8"/>',
         '<meta name="viewport" content="width=device-width, initial-scale=1"/>',
@@ -581,7 +619,7 @@ def write_backup_index_html(
         "tr:last-child td { border-bottom: none; }",
         ".files a { display: inline-block; margin: 0.15rem 0.35rem 0 0; padding: 0.15rem 0.45rem; background: #f4f4f5; border-radius: 0.25rem; font-size: 0.8rem; text-decoration: none; color: #27272a; }",
         ".files a:hover { background: #e4e4e7; }",
-        ".files a.ft-konv::before { content: 'Konversation '; font-size: 0.65rem; color: var(--muted); }",
+        ".files a.ft-konv::before { content: 'Conversation '; font-size: 0.65rem; color: var(--muted); }",
         ".files a.ft-md::before { content: 'MD '; font-size: 0.65rem; color: var(--muted); }",
         ".files a.ft-html::before { content: 'HTML '; font-size: 0.65rem; color: var(--muted); }",
         ".files a.ft-meta::before { content: 'Meta '; font-size: 0.65rem; color: var(--muted); }",
@@ -594,33 +632,33 @@ def write_backup_index_html(
         "<body>",
         '<div class="wrap">',
         "<header>",
-        f"<h1>Backup-Übersicht</h1>",
-        f'<p class="meta">{app_name}<br/>Backup-ID: <code>{esc(backup_id)}</code><br/>Erstellt: {created}</p>',
+        f"<h1>Backup overview</h1>",
+        f'<p class="meta">{app_line}<br/>Backup ID: <code>{esc(backup_id)}</code><br/>Created: {created}</p>',
         "</header>",
         '<div class="badges">',
-        f'<span class="badge">Modus: {esc(mode)}</span>',
-        f'<span class="badge">Formate: {esc(", ".join(str(f) for f in formats))}</span>',
-        f'<span class="badge">AI-Chats: {esc(counts.get("ai_chat", 0))}</span>',
+        f'<span class="badge">Mode: {esc(mode)}</span>',
+        f'<span class="badge">Formats: {esc(", ".join(str(f) for f in formats))}</span>',
+        f'<span class="badge">AI chats: {esc(counts.get("ai_chat", 0))}</span>',
         f'<span class="badge">Deployments: {esc(counts.get("deployment_conversation", 0))}</span>',
-        f'<span class="badge">Verarbeitet: {esc(counts.get("processed", 0))}</span>',
+        f'<span class="badge">Processed: {esc(counts.get("processed", 0))}</span>',
         "</div>",
     ]
 
     if global_errors:
-        lines.append('<div class="err-box"><strong>Hinweise/Fehler (Job)</strong><ul>')
+        lines.append('<div class="err-box"><strong>Notes / errors (job)</strong><ul>')
         for err in global_errors[:200]:
             lines.append(f"<li>{esc(err)}</li>")
         lines.append("</ul></div>")
 
     lines.append("<table><thead><tr>")
-    for h in ("Titel / Chat", "Typ", "Deployment", "ID", "Dateien & Links"):
+    for h in ("Title / chat", "Type", "Deployment", "ID", "Files and links"):
         lines.append(f"<th>{esc(h)}</th>")
     lines.append("</tr></thead><tbody>")
 
     items = manifest.get("items") or []
     if not items:
         lines.append(
-            '<tr><td colspan="5" style="color:var(--muted)">Keine Einträge in diesem Backup.</td></tr>'
+            '<tr><td colspan="5" style="color:var(--muted)">No entries in this backup.</td></tr>'
         )
     for row in items:
         title = row.get("title") or row.get("id") or "—"
@@ -665,12 +703,12 @@ def write_backup_index_html(
     lines.append("</tbody></table>")
 
     lines.append("<footer>")
-    lines.append("<p>Schnellzugriff:</p><ul>")
-    lines.append(f'<li><a href="{href("manifest.json")}">manifest.json</a> — vollständige Metadaten</li>')
+    lines.append("<p>Quick links:</p><ul>")
+    lines.append(f'<li><a href="{href("manifest.json")}">manifest.json</a> — full metadata</li>')
     lines.append(f'<li><a href="{href("errors.log")}">errors.log</a></li>')
     lines.append("</ul>")
     lines.append(
-        "<p>Tipp: Ordner entpacken und diese Datei (<code>index.html</code>) im Browser öffnen — Links sind relativ.</p>"
+        "<p>Tip: extract the folder and open this file (<code>index.html</code>) in a browser — links are relative.</p>"
     )
     lines.append("</footer>")
     lines.append("</div></body></html>")
@@ -802,6 +840,324 @@ def _segment_node_to_text(node: dict, depth: int) -> str:
             parts.append(redact_secrets_from_text(v.strip()))
 
     return "\n\n".join(parts)
+
+
+_MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((https?://[^)\s]+)\)")
+
+
+def _tidy_export_plaintext(text: str) -> str:
+    """Normalize whitespace and repair common segment-merge line breaks for Markdown/Open WebUI."""
+    if not text:
+        return ""
+    t = text.replace("\r\n", "\n").replace("\r", "\n")
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    t = _merge_paragraphs_after_unclosed_bold(t)
+    return _join_soft_breaks_inside_bold_spans(t)
+
+
+def _merge_paragraphs_after_unclosed_bold(text: str) -> str:
+    """Join paragraphs when the previous block ends with odd ** count (broken bold across a blank line)."""
+    parts = text.split("\n\n")
+    out: list[str] = []
+    i = 0
+    while i < len(parts):
+        block = parts[i]
+        if i + 1 < len(parts):
+            nxt = parts[i + 1]
+            last_line = block.split("\n")[-1] if block else ""
+            if last_line.count("**") % 2 == 1:
+                nxt_strip = nxt.strip()
+                if "\n" not in nxt_strip and len(nxt_strip) <= 8000:
+                    out.append(block.rstrip() + " " + nxt_strip)
+                    i += 2
+                    continue
+        out.append(block)
+        i += 1
+    return "\n\n".join(out)
+
+
+def _join_soft_breaks_inside_bold_spans(text: str) -> str:
+    """Join single newlines inside a paragraph when ** delimiters are unbalanced (split bold across lines)."""
+    parts_out: list[str] = []
+    for para in text.split("\n\n"):
+        lines = para.split("\n")
+        merged: list[str] = []
+        for ln in lines:
+            if not merged:
+                merged.append(ln)
+                continue
+            prev = merged[-1]
+            if prev.count("**") % 2 == 1 and ln.strip():
+                st = ln.lstrip()
+                if st.startswith(("#", "|", ">", "- ", "* ")):
+                    merged.append(ln)
+                    continue
+                if re.match(r"^\d+\.\s", st):
+                    merged.append(ln)
+                    continue
+                merged[-1] = prev.rstrip() + " " + ln.lstrip()
+            else:
+                merged.append(ln)
+        parts_out.append("\n".join(merged))
+    return "\n\n".join(parts_out)
+
+
+def _message_body_html_for_export(text: str, *, rich_markdown: bool) -> str:
+    """Turn plain export text into safe HTML (rich Markdown for assistant bubbles, escaped plain for users)."""
+    if not text:
+        return ""
+    tidied = _tidy_export_plaintext(text)
+    if not rich_markdown:
+        return f'<div class="plain-body">{html.escape(tidied, quote=True)}</div>'
+    return f'<div class="md-body">{_markdownish_to_html(tidied)}</div>'
+
+
+def _markdownish_to_html(text: str) -> str:
+    """Subset of Markdown used in Abacus BOT replies: headings, lists, blockquotes, tables, links, **bold**."""
+    lines = text.split("\n")
+    out: list[str] = []
+    i = 0
+
+    def flush_paragraph(buf: list[str]) -> None:
+        if not buf:
+            return
+        raw = "\n".join(buf).strip()
+        if raw:
+            out.append(f'<p class="md-p">{_inline_markdown_spans_to_html(raw)}</p>')
+        buf.clear()
+
+    para: list[str] = []
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        if not stripped:
+            flush_paragraph(para)
+            i += 1
+            continue
+
+        if re.fullmatch(r"[-*]{3,}", stripped) or re.fullmatch(r"_{3,}", stripped):
+            flush_paragraph(para)
+            out.append('<hr class="md-hr"/>')
+            i += 1
+            continue
+
+        if stripped in {"Web Search", "Search Results"} or stripped.lower() in {"web search", "search results"}:
+            flush_paragraph(para)
+            out.append(f'<div class="tool-label">{html.escape(stripped, quote=True)}</div>')
+            i += 1
+            continue
+
+        if re.match(r"^>\s?", stripped):
+            flush_paragraph(para)
+            bq_lines: list[str] = []
+            while i < len(lines) and lines[i].strip() and re.match(r"^>\s?", lines[i].strip()):
+                bq_lines.append(re.sub(r"^>\s?", "", lines[i].strip()))
+                i += 1
+            inner = "\n".join(bq_lines)
+            cls = "md-quote routing" if re.match(r"^routing\b", inner, re.I) else "md-quote"
+            out.append(
+                f'<blockquote class="{cls}"><p>{_inline_markdown_spans_to_html(inner)}</p></blockquote>'
+            )
+            continue
+
+        m_heading = re.match(r"^(#{1,6})\s+(.*)$", stripped)
+        if m_heading:
+            flush_paragraph(para)
+            level = min(len(m_heading.group(1)), 6)
+            title = m_heading.group(2).strip()
+            tag = f"h{level}"
+            out.append(f'<{tag} class="md-h">{html.escape(title, quote=True)}</{tag}>')
+            i += 1
+            continue
+
+        if _md_row_looks_like_table(stripped):
+            flush_paragraph(para)
+            table_lines: list[str] = []
+            while i < len(lines):
+                cur_raw = lines[i]
+                cur = cur_raw.strip()
+                if not cur:
+                    if not table_lines:
+                        break
+                    j = i + 1
+                    while j < len(lines) and not lines[j].strip():
+                        j += 1
+                    if j < len(lines):
+                        peek = lines[j].strip()
+                        if peek.startswith("|") or _md_is_table_continuation_line(peek) or (
+                            table_lines and _md_merge_table_fragment_row(table_lines[-1], peek)
+                        ):
+                            i += 1
+                            continue
+                    break
+                if "|" in cur:
+                    if table_lines and _md_merge_table_fragment_row(table_lines[-1], cur):
+                        table_lines[-1] = table_lines[-1].rstrip() + " " + cur.strip()
+                    else:
+                        table_lines.append(cur.strip())
+                    i += 1
+                    continue
+                if table_lines and _md_is_table_continuation_line(cur):
+                    table_lines[-1] = table_lines[-1].rstrip() + " " + cur.strip()
+                    i += 1
+                    continue
+                break
+            table_html = _md_table_to_html(table_lines)
+            if table_html:
+                out.append(table_html)
+            continue
+
+        list_match = re.match(r"^(\s*)([-*]|\d+\.)\s+(.+)$", line)
+        if list_match:
+            flush_paragraph(para)
+            ordered = list_match.group(2).endswith(".")
+            items: list[str] = []
+            pattern = re.compile(r"^(\s*)([-*]|\d+\.)\s+(.+)$")
+            while i < len(lines):
+                cur = lines[i]
+                if not cur.strip():
+                    break
+                lm = pattern.match(cur)
+                if not lm:
+                    break
+                items.append(lm.group(3).strip())
+                i += 1
+            tag = "ol" if ordered else "ul"
+            lis = "".join(f"<li>{_inline_markdown_spans_to_html(it)}</li>" for it in items)
+            out.append(f'<{tag} class="md-list">{lis}</{tag}>')
+            continue
+
+        para.append(line.rstrip())
+        i += 1
+
+    flush_paragraph(para)
+    return "\n".join(out)
+
+
+def _md_is_table_continuation_line(line: str) -> bool:
+    """A non-| line that belongs to the previous table row (cell wrapped in source)."""
+    s = line.strip()
+    if not s or len(s) > 260:
+        return False
+    if s.startswith(("#", ">", "- ", "* ")):
+        return False
+    if re.match(r"^\d+\.\s", s):
+        return False
+    return "|" not in s
+
+
+def _md_merge_table_fragment_row(prev_row: str, fragment: str) -> bool:
+    """Single-| fragment that continues the last row (e.g. 'Standard sizes |' after '..., allergies,')."""
+    if not prev_row.rstrip().endswith((",", ";")):
+        return False
+    frag = fragment.strip()
+    if frag.count("|") != 1:
+        return False
+    cells = [c.strip() for c in frag.split("|")]
+    while cells and cells[-1] == "":
+        cells.pop()
+    while cells and cells[0] == "":
+        cells.pop(0)
+    if len(cells) == 1 and frag.rstrip().endswith("|"):
+        return len(cells[0]) < 80
+    if len(cells) == 2:
+        return (not cells[1]) or len(cells[1]) < 48
+    return False
+
+
+def _md_row_looks_like_table(line: str) -> bool:
+    if "|" not in line or line.count("|") < 2:
+        return False
+    if _md_is_separator_row(line):
+        return False
+    return True
+
+
+def _md_is_separator_row(line: str) -> bool:
+    s = line.strip().strip("|")
+    if "|" not in line:
+        return False
+    cells = [c.strip() for c in s.split("|")]
+    if not cells:
+        return False
+    return all(re.fullmatch(r":?-{2,}:?", c or "-") for c in cells)
+
+
+def _md_table_to_html(rows: list[str]) -> str:
+    if len(rows) < 2:
+        return ""
+    header = rows[0]
+    if _md_is_separator_row(rows[1]):
+        body_rows = rows[2:]
+    else:
+        body_rows = rows[1:]
+
+    def split_row(r: str) -> list[str]:
+        return [c.strip() for c in r.strip().strip("|").split("|")]
+
+    heads = split_row(header)
+    if not heads:
+        return ""
+
+    thead = "".join(f"<th>{_inline_markdown_spans_to_html(h)}</th>" for h in heads)
+    tbody_parts: list[str] = []
+    for r in body_rows:
+        if not r.strip() or _md_is_separator_row(r):
+            continue
+        cells = split_row(r)
+        if len(cells) < len(heads):
+            cells = cells + [""] * (len(heads) - len(cells))
+        elif len(cells) > len(heads):
+            cells = cells[: len(heads)]
+        tbody_parts.append(
+            "<tr>" + "".join(f"<td>{_inline_markdown_spans_to_html(c)}</td>" for c in cells) + "</tr>"
+        )
+    return (
+        '<div class="md-table-wrap"><table class="md-table"><thead><tr>'
+        f"{thead}</tr></thead><tbody>{''.join(tbody_parts)}</tbody></table></div>"
+    )
+
+
+def _inline_markdown_spans_to_html(text: str) -> str:
+    """Escape-safe inline **bold**, `code`, and [label](https://...) links."""
+    if not text:
+        return ""
+    parts: list[str] = []
+    pos = 0
+    for m in _MD_LINK_RE.finditer(text):
+        parts.append(_inline_markdown_spans_no_links(text[pos : m.start()]))
+        label = m.group(1)
+        url = m.group(2).strip()
+        if url.startswith(("http://", "https://")):
+            safe_url = html.escape(url, quote=True)
+            parts.append(
+                f'<a href="{safe_url}" target="_blank" rel="noopener noreferrer">'
+                f"{html.escape(label, quote=True)}</a>"
+            )
+        else:
+            parts.append(html.escape(m.group(0), quote=True))
+        pos = m.end()
+    parts.append(_inline_markdown_spans_no_links(text[pos:]))
+    return "".join(parts)
+
+
+def _inline_markdown_spans_no_links(text: str) -> str:
+    if not text:
+        return ""
+    chunks = re.split(r"(\*\*[^*]+\*\*|`[^`]+`)", text)
+    out: list[str] = []
+    for ch in chunks:
+        if ch.startswith("**") and ch.endswith("**") and len(ch) > 4:
+            inner = html.escape(ch[2:-2], quote=True)
+            out.append(f"<strong>{inner}</strong>")
+        elif ch.startswith("`") and ch.endswith("`") and len(ch) > 2:
+            inner = html.escape(ch[1:-1], quote=True)
+            out.append(f'<code class="md-code">{inner}</code>')
+        else:
+            out.append(html.escape(ch, quote=True))
+    return "".join(out)
 
 
 def _string_value(value: Any) -> str | None:

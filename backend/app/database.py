@@ -70,7 +70,7 @@ class Database:
             ).fetchall()
             for row in rows:
                 errors = safe_json_loads(row["errors_json"], [])
-                errors.append("Job wurde durch Container-Neustart oder Prozessende unterbrochen.")
+                errors.append("Job was interrupted by a container restart or process exit.")
                 conn.execute(
                     """
                     UPDATE jobs

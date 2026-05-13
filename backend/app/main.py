@@ -20,6 +20,7 @@ from .local_settings import (
 )
 from .models import (
     APP_NAME,
+    APP_VERSION,
     BackupListResponse,
     ChatItem,
     ChatListResponse,
@@ -83,7 +84,7 @@ async def startup() -> None:
 
 @app.get("/api/health")
 async def health() -> dict[str, object]:
-    return {"ok": True, "app": APP_NAME}
+    return {"ok": True, "app": APP_NAME, "version": APP_VERSION}
 
 
 @app.post("/api/connect", response_model=ConnectionResult)
@@ -91,11 +92,11 @@ async def connect(payload: ConnectRequest | None = Body(default=None)) -> Connec
     payload = payload or ConnectRequest()
     api_key = payload.api_key.strip() if payload.api_key else None
     if api_key and not settings.allow_ui_api_key:
-        raise HTTPException(status_code=403, detail="UI API-Key Eingabe ist deaktiviert.")
+        raise HTTPException(status_code=403, detail="UI API key entry is disabled.")
     if payload.remember_locally and not api_key:
-        raise HTTPException(status_code=400, detail="remember_locally kann nur mit einem UI API-Key genutzt werden.")
+        raise HTTPException(status_code=400, detail="remember_locally can only be used together with a UI API key.")
     if payload.remember_locally and not settings.allow_persistent_api_key:
-        raise HTTPException(status_code=403, detail="Persistente API-Key Speicherung ist deaktiviert.")
+        raise HTTPException(status_code=403, detail="Persistent API key storage is disabled.")
     try:
         result = abacus_service.connect_with_fallback(
             api_key=api_key,
@@ -159,7 +160,7 @@ async def list_chats(
     if cached:
         items = [ChatItem(**item) for item in cached]
         items = _filter_items(items, include_ai_chat, include_deployments)
-        return ChatListResponse(items=items, counts=_counts(items), warnings=["Aus lokalem Cache geladen."])
+        return ChatListResponse(items=items, counts=_counts(items), warnings=["Loaded from local cache."])
 
     _ensure_connected()
     try:
@@ -178,9 +179,9 @@ async def list_chats(
 @app.post("/api/export", response_model=ExportStartResponse)
 async def start_export(request: ExportRequest) -> ExportStartResponse:
     if request.mode == "selected" and not request.chat_ids:
-        raise HTTPException(status_code=400, detail="Für mode=selected müssen chat_ids angegeben werden.")
+        raise HTTPException(status_code=400, detail="For mode=selected, chat_ids must be provided.")
     if not request.formats:
-        raise HTTPException(status_code=400, detail="Mindestens ein Exportformat muss ausgewählt sein.")
+        raise HTTPException(status_code=400, detail="Select at least one export format.")
     _ensure_connected()
     manager = _job_manager()
     job_id = await manager.start_export(request)
@@ -191,7 +192,7 @@ async def start_export(request: ExportRequest) -> ExportStartResponse:
 async def get_job(job_id: str):
     job = _job_manager().get_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job nicht gefunden.")
+        raise HTTPException(status_code=404, detail="Job not found.")
     return job
 
 
@@ -199,7 +200,7 @@ async def get_job(job_id: str):
 async def cancel_job(job_id: str) -> dict[str, bool]:
     cancelled = _job_manager().cancel_job(job_id)
     if not cancelled:
-        raise HTTPException(status_code=404, detail="Job nicht gefunden.")
+        raise HTTPException(status_code=404, detail="Job not found.")
     return {"cancelled": True}
 
 
@@ -235,7 +236,7 @@ async def download_backup(backup_id: str):
 @app.delete("/api/backups/{backup_id}")
 async def delete_backup(backup_id: str, confirm: bool = Query(False)) -> dict[str, bool]:
     if not confirm:
-        raise HTTPException(status_code=400, detail="Löschen erfordert ?confirm=true.")
+        raise HTTPException(status_code=400, detail="Delete requires ?confirm=true.")
     backup = _backup_or_404(backup_id)
     backup_path = _safe_backup_path(backup["path"])
     if backup_path.exists():
@@ -283,7 +284,7 @@ def _conversation_query_scopes() -> list[dict[str, str]]:
 
 def _job_manager():
     if job_manager is None:
-        raise HTTPException(status_code=503, detail="Job Manager ist noch nicht bereit.")
+        raise HTTPException(status_code=503, detail="Job manager is not ready yet.")
     return job_manager
 
 
@@ -305,7 +306,7 @@ def _filter_items(items: list[ChatItem], include_ai_chat: bool, include_deployme
 def _backup_or_404(backup_id: str) -> dict:
     backup = db.get_backup(backup_id)
     if not backup:
-        raise HTTPException(status_code=404, detail="Backup nicht gefunden.")
+        raise HTTPException(status_code=404, detail="Backup not found.")
     _safe_backup_path(backup["path"])
     return backup
 
@@ -316,7 +317,7 @@ def _safe_backup_path(path: str | Path) -> Path:
     try:
         candidate.relative_to(root)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Ungültiger Backup-Pfad.") from exc
+        raise HTTPException(status_code=400, detail="Invalid backup path.") from exc
     return candidate
 
 

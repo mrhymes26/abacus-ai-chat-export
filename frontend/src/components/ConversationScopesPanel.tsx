@@ -31,9 +31,9 @@ export default function ConversationScopesPanel({ status, scopes, onSave }: Conv
     setError(null);
     try {
       await onSave(toSupportedScopes(draft));
-      setMessage("Conversation Scopes gespeichert.");
+      setMessage("Conversation scopes saved.");
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Scopes konnten nicht gespeichert werden.");
+      setError(exc instanceof Error ? exc.message : "Could not save scopes.");
     } finally {
       setBusy(false);
     }
@@ -43,49 +43,49 @@ export default function ConversationScopesPanel({ status, scopes, onSave }: Conv
     <section className="border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-2">
         <Settings className="h-5 w-5 text-sky-700" />
-        <h2 className="text-lg font-semibold">Conversation-Bereich</h2>
+        <h2 className="text-lg font-semibold">Conversation scope</h2>
       </div>
 
       <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-        <p className="font-semibold">Automatische Suche ist aktiv</p>
+        <p className="font-semibold">Automatic discovery is active</p>
         <p className="mt-1">
-          Die App hat {countScopes(status?.conversation_scopes || {})} Bereiche gefunden, in denen Abacus nach
-          Deployment Conversations suchen kann. Du musst hier normalerweise nichts eintragen.
+          The app found {countScopes(status?.conversation_scopes || {})} scope(s) where Abacus can look for deployment
+          conversations. You usually do not need to enter anything here.
         </p>
       </div>
 
       <div className="mt-4 grid gap-3 text-sm text-zinc-700 md:grid-cols-2">
         <p>
-          Automatisch gefundene Bereiche: <span className="font-semibold text-zinc-900">{countScopes(status?.conversation_scopes || {})}</span>
+          Automatically discovered scopes: <span className="font-semibold text-zinc-900">{countScopes(status?.conversation_scopes || {})}</span>
         </p>
         <p>
-          Von dir manuell gespeicherte Bereiche: <span className="font-semibold text-zinc-900">{countScopes(status?.stored_conversation_scopes || {})}</span>
+          Manually saved scopes: <span className="font-semibold text-zinc-900">{countScopes(status?.stored_conversation_scopes || {})}</span>
         </p>
-        <p>Backup-/Datenordner: <span className="font-mono">{status?.data_dir || "/data"}</span></p>
-        <p>Manuelle Scope-Datei: <span className="font-mono">/data/settings/conversation_scopes.json</span></p>
+        <p>Backup / data directory: <span className="font-mono">{status?.data_dir || "/data"}</span></p>
+        <p>Manual scope file: <span className="font-mono">/data/settings/conversation_scopes.json</span></p>
       </div>
 
       <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
-        <p className="font-semibold text-zinc-900">Manuelle Einschränkung (optional)</p>
+        <p className="font-semibold text-zinc-900">Manual restriction (optional)</p>
         <p className="mt-1">
-          Nutze die Felder unten nur, wenn du die automatische Suche bewusst auf bestimmte Abacus-Bereiche begrenzen
-          möchtest. Leer lassen bedeutet: automatisch alles durchsuchen, was dein API-Key sehen darf.
+          Use the fields below only if you want to limit automatic discovery to specific Abacus scopes. Leave them
+          empty to search everything your API key can access.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-5 grid gap-4 lg:grid-cols-2">
         <ScopeInput
-          label="Nur diese Deployment IDs durchsuchen"
+          label="Search only these deployment IDs"
           value={draft.deployment_ids}
           onChange={(value) => setDraft((current) => ({ ...current, deployment_ids: value }))}
         />
         <ScopeInput
-          label="Nur diese External Application IDs durchsuchen"
+          label="Search only these external application IDs"
           value={draft.external_application_ids}
           onChange={(value) => setDraft((current) => ({ ...current, external_application_ids: value }))}
         />
         <ScopeInput
-          label="Nur diese Conversation Types durchsuchen"
+          label="Search only these conversation types"
           value={draft.conversation_types}
           onChange={(value) => setDraft((current) => ({ ...current, conversation_types: value }))}
         />
@@ -97,14 +97,14 @@ export default function ConversationScopesPanel({ status, scopes, onSave }: Conv
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:bg-zinc-400"
           >
             <Save className="h-4 w-4" />
-            Scopes speichern
+            Save scopes
           </button>
         </div>
       </form>
 
       <p className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-900">
-        Diese Begriffe kommen aus dem offiziellen Abacus Python SDK. Für normale Backups reicht die automatische
-        Erkennung. Manuelle Werte können kommasepariert, mit Semikolon oder zeilenweise eingetragen werden.
+        These terms come from the official Abacus Python SDK. For typical backups, automatic discovery is enough.
+        Manual values can be comma-separated, semicolon-separated, or one per line.
       </p>
       {message && <p className="mt-3 text-sm font-medium text-emerald-700">{message}</p>}
       {error && <p className="mt-3 text-sm font-medium text-red-700">{error}</p>}
@@ -118,7 +118,7 @@ function countScopes(scopes: Record<string, string[]>): number {
 
 const supportedScopeKeys = ["deployment_ids", "external_application_ids", "conversation_types"];
 
-/** Zeilen in der eingeklappten Vorschau; bei mehr Einträgen volle Bearbeitung ausklappbar. */
+/** Lines in collapsed preview; full editing expands when there are more entries. */
 const SCOPE_PREVIEW_LINES = 10;
 
 function toSupportedScopes(scopes: ConversationScopes): ConversationScopes {
@@ -158,7 +158,7 @@ function ScopeInput({
       {longList && !expanded ? (
         <div className="mt-2 space-y-2">
           <p className="text-xs text-zinc-500">
-            Vorschau: {SCOPE_PREVIEW_LINES} von {value.length} Einträgen — zum Bearbeiten ausklappen.
+            Preview: {SCOPE_PREVIEW_LINES} of {value.length} entries — expand to edit.
           </p>
           <div className="max-h-48 overflow-y-auto rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 font-mono text-xs leading-relaxed text-zinc-800">
             {previewSlice.map((line, index) => (
@@ -173,7 +173,7 @@ function ScopeInput({
             className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
           >
             <ChevronDown className="h-4 w-4 shrink-0" />
-            Alle {value.length} Einträge anzeigen und bearbeiten
+            Show and edit all {value.length} entries
           </button>
         </div>
       ) : (
@@ -183,7 +183,7 @@ function ScopeInput({
             onChange={(event) => onChange(splitValues(event.target.value))}
             rows={textareaRows}
             className="w-full rounded-md border border-zinc-300 px-3 py-2 font-mono text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-            placeholder="ein Wert pro Zeile oder kommasepariert"
+            placeholder="One value per line or comma-separated"
           />
           {longList && expanded && (
             <button
@@ -192,7 +192,7 @@ function ScopeInput({
               className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-100"
             >
               <ChevronUp className="h-4 w-4 shrink-0" />
-              Einklappen (nur Vorschau)
+              Collapse (preview only)
             </button>
           )}
         </div>

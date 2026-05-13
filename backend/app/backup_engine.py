@@ -20,7 +20,7 @@ from .exporters import (
     write_openwebui_import,
 )
 from .local_settings import merge_scope_summaries, read_conversation_scopes, summary_to_query_scopes
-from .models import APP_NAME, ChatItem, ExportRequest
+from .models import APP_NAME, APP_VERSION, ChatItem, ExportRequest
 from .security import safe_error
 from .utils import ensure_dir, now_utc_iso, relative_posix, safe_filename, short_id
 
@@ -49,7 +49,7 @@ def run_backup_job(
         ensure_dir(deployment_dir)
         errors_log = backup_dir / "errors.log"
         errors_log.write_text("", encoding="utf-8")
-        db.update_job(job_id, status="running", current_item="Chats werden geladen")
+        db.update_job(job_id, status="running", current_item="Loading chats")
 
         items = _resolve_items(request, abacus_service)
         db.update_job(job_id, total=len(items), done=0, failed=0)
@@ -68,11 +68,11 @@ def run_backup_job(
             try:
                 detail = abacus_service.get_chat_detail(item)
             except Exception as exc:
-                item_errors.append(f"{item.type}:{item.id}: Detailabruf fehlgeschlagen: {safe_error(exc)}")
+                item_errors.append(f"{item.type}:{item.id}: Failed to fetch detail: {safe_error(exc)}")
             export_stats = conversation_export_stats(detail)
             if export_stats.get("complete_by_total_events") is False:
                 item_errors.append(
-                    f"{item.type}:{item.id}: Verlauf moeglicherweise unvollstaendig "
+                    f"{item.type}:{item.id}: History may be incomplete "
                     f"(history_items={export_stats.get('history_items')}, total_events={export_stats.get('total_events')})."
                 )
 
@@ -80,14 +80,14 @@ def run_backup_job(
                 try:
                     item_files.append(write_json(path_base.with_suffix(".json"), detail))
                 except Exception as exc:
-                    item_errors.append(f"{item.type}:{item.id}: JSON-Export fehlgeschlagen: {safe_error(exc)}")
+                    item_errors.append(f"{item.type}:{item.id}: JSON export failed: {safe_error(exc)}")
 
             if "markdown" in request.formats:
                 try:
                     markdown = extract_messages_to_markdown(detail, item.title, item.type, item.id)
                     item_files.append(write_markdown(path_base.with_suffix(".md"), markdown))
                 except Exception as exc:
-                    item_errors.append(f"{item.type}:{item.id}: Markdown-Export fehlgeschlagen: {safe_error(exc)}")
+                    item_errors.append(f"{item.type}:{item.id}: Markdown export failed: {safe_error(exc)}")
 
             if "openwebui" in request.formats:
                 try:
@@ -106,7 +106,7 @@ def run_backup_job(
                         )
                     )
                 except Exception as exc:
-                    item_errors.append(f"{item.type}:{item.id}: Open-WebUI-Konvertierung fehlgeschlagen: {safe_error(exc)}")
+                    item_errors.append(f"{item.type}:{item.id}: Open WebUI conversion failed: {safe_error(exc)}")
 
             if "html" in request.formats:
                 # Nur Format „HTML“: ein einziges druckfähiges Konversationsdokument — ohne SDK-Roh-Export
@@ -116,9 +116,9 @@ def run_backup_job(
                         export_result = abacus_service.export_chat_html(item)
                         item_files.extend(write_export_result(export_result, path_base.with_name(path_base.name + "_html")))
                     except AttributeError as exc:
-                        item_errors.append(f"{item.type}:{item.id}: HTML-Export nicht verfügbar: {safe_error(exc)}")
+                        item_errors.append(f"{item.type}:{item.id}: HTML export not available: {safe_error(exc)}")
                     except Exception as exc:
-                        item_errors.append(f"{item.type}:{item.id}: HTML-Export fehlgeschlagen: {safe_error(exc)}")
+                        item_errors.append(f"{item.type}:{item.id}: HTML export failed: {safe_error(exc)}")
                 try:
                     item_files.append(
                         write_conversation_readout_html(
@@ -132,7 +132,7 @@ def run_backup_job(
                         )
                     )
                 except Exception as exc:
-                    item_errors.append(f"{item.type}:{item.id}: Konversations-HTML (Lesbare Ansicht) fehlgeschlagen: {safe_error(exc)}")
+                    item_errors.append(f"{item.type}:{item.id}: Conversation HTML (readout) failed: {safe_error(exc)}")
 
             if not item_files:
                 failed += 1
@@ -160,6 +160,7 @@ def run_backup_job(
             "backup_id": backup_id,
             "created_at": created_at,
             "app": APP_NAME,
+            "app_version": APP_VERSION,
             "request": request.model_dump(mode="json"),
             "counts": counts,
             "items": manifest_items,
@@ -193,7 +194,7 @@ def run_backup_job(
         }
         db.update_job(job_id, status=final_status, current_item=None, result_json=result, errors_json=errors)
     except Exception as exc:
-        errors.append(f"Backup-Job konnte nicht gestartet oder abgeschlossen werden: {safe_error(exc)}")
+        errors.append(f"Backup job could not be started or completed: {safe_error(exc)}")
         db.update_job(job_id, status="failed", current_item=None, errors_json=errors)
 
 

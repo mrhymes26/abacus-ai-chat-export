@@ -73,9 +73,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void refreshStatus().catch((exc) => addToast("error", exc instanceof Error ? exc.message : "Status konnte nicht geladen werden."));
-    void refreshBackups().catch((exc) => addToast("error", exc instanceof Error ? exc.message : "Backups konnten nicht geladen werden."));
-    void refreshConversationScopes().catch((exc) => addToast("error", exc instanceof Error ? exc.message : "Conversation Scopes konnten nicht geladen werden."));
+    void refreshStatus().catch((exc) => addToast("error", exc instanceof Error ? exc.message : "Could not load status."));
+    void refreshBackups().catch((exc) => addToast("error", exc instanceof Error ? exc.message : "Could not load backups."));
+    void refreshConversationScopes().catch((exc) => addToast("error", exc instanceof Error ? exc.message : "Could not load conversation scopes."));
   }, [addToast, refreshBackups, refreshConversationScopes, refreshStatus]);
 
   useEffect(() => {
@@ -89,10 +89,10 @@ export default function App() {
           if (terminalStatuses.has(next.status)) {
             window.clearInterval(interval);
             await refreshBackups();
-            addToast(next.status === "completed" ? "success" : "info", `Export-Job ${next.status}.`);
+            addToast(next.status === "completed" ? "success" : "info", `Export job: ${next.status}.`);
           }
         })
-        .catch((exc) => addToast("error", exc instanceof Error ? exc.message : "Job-Status konnte nicht geladen werden."));
+        .catch((exc) => addToast("error", exc instanceof Error ? exc.message : "Could not load job status."));
     }, 1000);
     return () => {
       stopped = true;
@@ -107,20 +107,20 @@ export default function App() {
     const result = await connectApi(apiKey, rememberLocally);
     setConnection(result);
     await refreshStatus();
-    addToast("success", result.persisted ? "Abacus.AI Verbindung steht, API-Key wurde lokal gespeichert." : "Abacus.AI Verbindung steht.");
+    addToast("success", result.persisted ? "Connected to Abacus.AI; API key stored locally." : "Connected to Abacus.AI.");
   }
 
   async function handleForgetStoredKey() {
     await forgetStoredApiKey();
     await refreshStatus();
-    addToast("success", "Lokal gespeicherter API-Key geloescht.");
+    addToast("success", "Stored API key removed.");
   }
 
   async function handleSaveConversationScopes(scopes: ConversationScopes) {
     const saved = await saveConversationScopes(scopes);
     setConversationScopes(saved);
     await refreshStatus();
-    addToast("success", "Conversation Scopes gespeichert.");
+    addToast("success", "Conversation scopes saved.");
   }
 
   async function loadChats(refresh = false) {
@@ -132,9 +132,9 @@ export default function App() {
       setChats(result.items);
       setChatWarnings(result.warnings || []);
       setSelectedIds(new Set());
-      addToast("success", `${result.items.length} Chats geladen.`);
+      addToast("success", `${result.items.length} chats loaded.`);
     } catch (exc) {
-      addToast("error", exc instanceof Error ? exc.message : "Chats konnten nicht geladen werden.");
+      addToast("error", exc instanceof Error ? exc.message : "Could not load chats.");
       throw exc;
     } finally {
       setLoadingChats(false);
@@ -151,9 +151,9 @@ export default function App() {
       });
       const nextJob = await getJob(result.job_id);
       setJob(nextJob);
-      addToast("success", "Export-Job gestartet.");
+      addToast("success", "Export job started.");
     } catch (exc) {
-      addToast("error", exc instanceof Error ? exc.message : "Export konnte nicht gestartet werden.");
+      addToast("error", exc instanceof Error ? exc.message : "Could not start export.");
       throw exc;
     }
   }
@@ -163,21 +163,21 @@ export default function App() {
       await cancelJob(jobId);
       const nextJob = await getJob(jobId);
       setJob(nextJob);
-      addToast("info", "Job-Abbruch angefordert.");
+      addToast("info", "Job cancellation requested.");
     } catch (exc) {
-      addToast("error", exc instanceof Error ? exc.message : "Job konnte nicht abgebrochen werden.");
+      addToast("error", exc instanceof Error ? exc.message : "Could not cancel job.");
     }
   }
 
   async function handleDeleteBackup(backupId: string) {
     await deleteBackup(backupId);
     await refreshBackups();
-    addToast("success", "Backup gelöscht.");
+    addToast("success", "Backup deleted.");
   }
 
   return (
     <>
-      <Layout status={status} activeView={activeView} onViewChange={setActiveView}>
+      <Layout activeView={activeView} onViewChange={setActiveView}>
         <div className="border border-zinc-200 bg-white p-4 shadow-sm lg:hidden">
           <p className="text-sm font-semibold uppercase text-emerald-700">Abacus Backup</p>
           <h1 className="mt-1 text-2xl font-semibold">Chat Export Manager</h1>
@@ -206,10 +206,17 @@ export default function App() {
         {activeView === "settings" && (
           <section id="settings" className="grid gap-6">
             <div className="border border-zinc-200 bg-white p-5 shadow-sm">
-              <p className="text-sm font-semibold uppercase text-emerald-700">Einstellungen</p>
-              <h2 className="mt-1 text-xl font-semibold">Verbindung und Scopes</h2>
+              <p className="text-sm font-semibold uppercase text-emerald-700">Settings</p>
+              <h2 className="mt-1 text-xl font-semibold">Connection and scopes</h2>
               <p className="mt-2 text-sm text-zinc-600">
-                API-Key, SDK-Status und Conversation-Scopes sind hier gebündelt, damit die Arbeitsansicht kompakt bleibt.
+                API key, SDK status, and conversation scopes are grouped here so the main chat view stays compact.
+              </p>
+            </div>
+            <div className="border border-zinc-200 bg-white p-5 shadow-sm">
+              <p className="text-sm font-semibold uppercase text-emerald-700">Storage location</p>
+              <p className="mt-1 font-mono text-sm text-zinc-800 break-all">{status?.data_dir || "/data"}</p>
+              <p className="mt-2 text-sm text-zinc-600">
+                Backups, SQLite metadata, and optional persisted settings live here (for example in the Docker volume <code className="rounded bg-zinc-100 px-1">/data</code> inside the container).
               </p>
             </div>
             <ApiKeyPanel

@@ -177,7 +177,7 @@ class AbacusService:
         chosen_key = api_key or env_key or fallback_api_key
         source = "ui" if api_key else "env" if env_key else fallback_source if fallback_api_key else "none"
         if not chosen_key:
-            raise ValueError("Kein Abacus.AI API-Key vorhanden.")
+            raise ValueError("No Abacus.AI API key available.")
 
         client = create_client(chosen_key)
         warnings: list[str] = []
@@ -199,9 +199,9 @@ class AbacusService:
                     ],
                 )
             except Exception as exc:
-                raise RuntimeError(f"Abacus-Verbindungstest fehlgeschlagen: {safe_error(exc)}") from exc
+                raise RuntimeError(f"Abacus connection test failed: {safe_error(exc)}") from exc
         else:
-            warnings.append("suggest_abacus_apis ist im installierten SDK nicht verfügbar; Verbindung wurde nur initialisiert.")
+            warnings.append("suggest_abacus_apis is not available in the installed SDK; connection was only initialized.")
 
         self._client = client
         self._source = source
@@ -236,8 +236,8 @@ class AbacusService:
             scopes.extend({"conversation_type": value} for value in _deployment_conversation_type_values())
             if scopes:
                 warnings.append(
-                    "Keine Deployment IDs oder External Application IDs automatisch gefunden; "
-                    "verwende Conversation-Type-Fallbacks aus dem installierten Abacus SDK."
+                    "No deployment IDs or external application IDs were auto-discovered; "
+                    "using conversation-type fallbacks from the installed Abacus SDK."
                 )
 
         self._discovered_conversation_scopes = _dedupe_scopes(scopes)
@@ -268,9 +268,9 @@ class AbacusService:
                     )
                     items.extend(_normalize_chat_item(raw, "ai_chat") for raw in raw_items)
                 except Exception as exc:
-                    warnings.append(f"AI-Chat-Sessions konnten nicht geladen werden: {safe_error(exc)}")
+                    warnings.append(f"Could not load AI chat sessions: {safe_error(exc)}")
             else:
-                warnings.append("SDK-Methode list_chat_sessions fehlt.")
+                warnings.append("SDK method list_chat_sessions is missing.")
 
         if include_deployments:
             if hasattr(client, "list_deployment_conversations"):
@@ -283,12 +283,11 @@ class AbacusService:
                         items.extend(self._list_deployment_conversations_for_scope(method, scope, warnings))
                 else:
                     warnings.append(
-                        "Deployment Conversations konnten nicht geladen werden, weil kein unterstuetzter Scope "
-                        "gesetzt oder automatisch ermittelt werden konnte. Setze eine Deployment ID, External "
-                        "Application ID oder Conversation Type."
+                        "Could not load deployment conversations because no supported scope could be set or "
+                        "discovered automatically. Set a deployment ID, external application ID, or conversation type."
                     )
             else:
-                warnings.append("SDK-Methode list_deployment_conversations fehlt.")
+                warnings.append("SDK method list_deployment_conversations is missing.")
 
         unique: dict[tuple[str, str | None, str], ChatItem] = {}
         for item in items:
@@ -300,7 +299,7 @@ class AbacusService:
         client = self._require_client()
         if chat_item.type == "ai_chat":
             if not hasattr(client, "get_chat_session"):
-                return {"raw_preview": chat_item.raw_preview or {}, "warning": "SDK-Methode get_chat_session fehlt."}
+                return {"raw_preview": chat_item.raw_preview or {}, "warning": "SDK method get_chat_session is missing."}
             method = getattr(client, "get_chat_session")
             response = try_call_variants(
                 method,
@@ -317,7 +316,7 @@ class AbacusService:
         if not hasattr(client, "get_deployment_conversation"):
             return {
                 "raw_preview": chat_item.raw_preview or {},
-                "warning": "SDK-Methode get_deployment_conversation fehlt.",
+                "warning": "SDK method get_deployment_conversation is missing.",
             }
         method = getattr(client, "get_deployment_conversation")
         return self._get_full_deployment_conversation_detail(method, chat_item)
@@ -326,7 +325,7 @@ class AbacusService:
         client = self._require_client()
         if chat_item.type == "ai_chat":
             if not hasattr(client, "export_chat_session"):
-                raise AttributeError("SDK-Methode export_chat_session fehlt.")
+                raise AttributeError("SDK method export_chat_session is missing.")
             method = getattr(client, "export_chat_session")
             response = try_call_variants(
                 method,
@@ -340,7 +339,7 @@ class AbacusService:
             )
         else:
             if not hasattr(client, "export_deployment_conversation"):
-                raise AttributeError("SDK-Methode export_deployment_conversation fehlt.")
+                raise AttributeError("SDK method export_deployment_conversation is missing.")
             method = getattr(client, "export_deployment_conversation")
             response = try_call_variants(
                 method,
@@ -379,7 +378,7 @@ class AbacusService:
                 max_pages=1,
             )
         except Exception as exc:
-            warnings.append(f"Deployment-ID Autodiscovery ueber list_projects fehlgeschlagen: {safe_error(exc)}")
+            warnings.append(f"Deployment ID autodiscovery via list_projects failed: {safe_error(exc)}")
             return []
 
         scopes: list[dict[str, str]] = []
@@ -395,7 +394,7 @@ class AbacusService:
                     max_pages=5,
                 )
             except Exception as exc:
-                warnings.append(f"Deployments fuer project_id={project_id} konnten nicht ermittelt werden: {safe_error(exc)}")
+                warnings.append(f"Could not list deployments for project_id={project_id}: {safe_error(exc)}")
                 continue
             for deployment in deployments:
                 deployment_id = _extract_text_value(deployment, DEPLOYMENT_ID_KEYS)
@@ -413,7 +412,7 @@ class AbacusService:
                 max_pages=1,
             )
         except Exception as exc:
-            warnings.append(f"External-Application Autodiscovery fehlgeschlagen: {safe_error(exc)}")
+            warnings.append(f"External application autodiscovery failed: {safe_error(exc)}")
             return []
         scopes: list[dict[str, str]] = []
         for application in applications:
@@ -451,7 +450,7 @@ class AbacusService:
                     last_error = exc
         if last_error:
             warnings.append(
-                f"Deployment Conversations fuer {_scope_label(scope)} konnten nicht geladen werden: {safe_error(last_error)}"
+                f"Could not load deployment conversations for {_scope_label(scope)}: {safe_error(last_error)}"
             )
         return []
 

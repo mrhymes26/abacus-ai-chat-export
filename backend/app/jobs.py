@@ -36,7 +36,7 @@ class JobManager:
         try:
             await asyncio.to_thread(run_backup_job, job_id, request, self.abacus_service, self.data_dir, cancel_event)
         except Exception as exc:
-            self.db.append_job_error(job_id, f"Job-Laufzeitfehler: {safe_error(exc)}")
+            self.db.append_job_error(job_id, f"Job runtime error: {safe_error(exc)}")
             self.db.update_job(job_id, status="failed", current_item=None)
         finally:
             self._cancel_flags.pop(job_id, None)

@@ -24,7 +24,7 @@ export default function BackupHistory({ backups, onRefresh, onManifest, onDelete
   }
 
   async function deleteItem(backupId: string) {
-    if (!window.confirm("Dieses lokale Backup wirklich löschen?")) return;
+    if (!window.confirm("Delete this local backup?")) return;
     setBusyId(backupId);
     try {
       await onDelete(backupId);
@@ -38,12 +38,12 @@ export default function BackupHistory({ backups, onRefresh, onManifest, onDelete
     <section id="backups" className="border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Backup-Historie</h2>
-          <p className="mt-1 text-sm text-zinc-600">{backups.length} lokale Backups</p>
+          <h2 className="text-lg font-semibold">Backup history</h2>
+          <p className="mt-1 text-sm text-zinc-600">{backups.length} local backups</p>
         </div>
         <button onClick={onRefresh} className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-50">
           <RefreshCw className="h-4 w-4" />
-          Aktualisieren
+          Refresh
         </button>
       </div>
 
@@ -53,7 +53,7 @@ export default function BackupHistory({ backups, onRefresh, onManifest, onDelete
             <div>
               <p className="font-semibold text-zinc-900">{backup.backup_id}</p>
               <p className="mt-1 text-sm text-zinc-600">
-                {formatDate(backup.created_at)} · Chats: {backup.counts?.processed ?? backup.counts?.total ?? 0} · Fehler: {backup.counts?.failed ?? 0} · {formatSize(backup.size_bytes)}
+                {formatDate(backup.created_at)} · Chats: {backup.counts?.processed ?? backup.counts?.total ?? 0} · Errors: {backup.counts?.failed ?? 0} · {formatSize(backup.size_bytes)}
               </p>
               <p className="mt-1 break-all font-mono text-xs text-zinc-500">{backup.path}</p>
             </div>
@@ -68,12 +68,12 @@ export default function BackupHistory({ backups, onRefresh, onManifest, onDelete
               </a>
               <button disabled={busyId === backup.backup_id} onClick={() => deleteItem(backup.backup_id)} className="inline-flex items-center gap-2 rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60">
                 <Trash2 className="h-4 w-4" />
-                Löschen
+                Delete
               </button>
             </div>
           </div>
         ))}
-        {!backups.length && <div className="p-8 text-center text-sm text-zinc-500">Noch keine Backups vorhanden.</div>}
+        {!backups.length && <div className="p-8 text-center text-sm text-zinc-500">No backups yet.</div>}
       </div>
 
       {manifest && (

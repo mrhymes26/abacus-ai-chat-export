@@ -2,13 +2,18 @@
 
 A local Docker web application to backup and export your Abacus.AI chats and deployment conversations using the official Python library `abacusai`.
 
+![Version](https://img.shields.io/badge/version-1.0.0-047857.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
 ![Backend](https://img.shields.io/badge/backend-FastAPI-009688.svg)
 ![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61DAFB.svg)
 ![Python](https://img.shields.io/badge/python-3.11%2B-yellow.svg)
-![License](https://img.shields.io/badge/license-TBD-lightgrey.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-The app runs locally, connects to Abacus.AI only via API key, and stores backups persistently in a Docker volume. No browser scraping, no Selenium, no Playwright, and no Abacus password login.
+The app runs locally, connects to Abacus.AI only via API key, and stores backups persistently in a Docker volume. No browser scraping, no Selenium, no Playwright, and no Abacus password login. The **web UI and API user-facing messages are English**; generated HTML uses English copy inside files (some export filenames still use the legacy `_Konversation` suffix—see [HTML](#html)).
+
+**Release:** `1.0.0` (see [CHANGELOG](CHANGELOG.md)). New backups include `app_version` in `manifest.json` alongside `app`. The running app reports the same value from `GET /api/health` (`version`).
+
+**Security:** See [SECURITY.md](SECURITY.md) for how to report vulnerabilities privately.
 
 ## Background
 
@@ -51,7 +56,7 @@ The UI contains connection status, chat table, export controls, job progress, ba
 ## Requirements
 
 - Docker Desktop or Docker Engine with Docker Compose
-- Abacus.AI API key
+- An Abacus.AI API key (see [Abacus.AI API key: how to create and use it](#abacusai-api-key-how-to-create-and-use-it))
 - Local port `8080` available
 
 For development:
@@ -63,7 +68,7 @@ For development:
 
 ```bash
 cp .env.example .env
-# edit .env and set ABACUS_API_KEY, or enter the key in the UI
+# edit .env: set ABACUS_API_KEY (see "Abacus.AI API key" in README), or paste the key in the UI under Settings
 docker compose up -d --build
 ```
 
@@ -90,11 +95,13 @@ docker compose down
 ### Option 1: Docker Compose
 
 ```bash
-git clone <your-repository-url>
-cd app-abacus-chat-backup
+git clone https://github.com/OWNER/REPO.git
+cd REPO
 cp .env.example .env
 docker compose up -d --build
 ```
+
+Replace `https://github.com/OWNER/REPO.git` with your fork or upstream clone URL.
 
 ### Option 2: Docker Build
 
@@ -113,7 +120,7 @@ Configuration can be provided through `.env`, Docker Compose environment variabl
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `ABACUS_API_KEY` | empty | Abacus.AI API key. Recommended for regular use. |
+| `ABACUS_API_KEY` | empty | Abacus.AI API key. Recommended for regular use; see [Abacus.AI API key: how to create and use it](#abacusai-api-key-how-to-create-and-use-it). |
 | `ABACUS_DEPLOYMENT_IDS` | empty | Deployment IDs for deployment conversations. |
 | `ABACUS_EXTERNAL_APPLICATION_IDS` | empty | External application IDs for deployment conversation listing. |
 | `ABACUS_CONVERSATION_TYPES` | empty | Conversation type scopes required by some SDK/account setups. |
@@ -136,13 +143,54 @@ APP_BASIC_AUTH_USER=
 APP_BASIC_AUTH_PASSWORD=
 ```
 
+## Abacus.AI API key: how to create and use it
+
+This app authenticates to Abacus.AI **only** with an API key (no password login in the browser). Create the key in your Abacus.AI account, then supply it to the container or the web UI.
+
+### 1. Create an API key
+
+1. **Sign up or sign in** at [Abacus.AI](https://abacus.ai/).
+2. Open the **API Keys** area in your account. The official Python SDK getting-started guide points to the dashboard at **[abacus.ai/app/profile/apikey](https://abacus.ai/app/profile/apikey)** (sign-in required).
+3. Use **Generate** / **Create API key** (wording may vary slightly in the product UI).
+4. **Copy the key once** when it is shown. Many products only display the full secret at creation time—store it in a password manager or your local `.env` immediately.
+5. **Do not** commit API keys to git, paste them into public chats, or share screenshots that include the key.
+
+Official references:
+
+- [Python SDK — Getting started](https://api.abacus.ai/help/python-sdk/getting-started) (prerequisites include generating a key from the API Keys dashboard).
+- [Abacus.AI help / API](https://abacus.ai/help/api/) for broader platform documentation.
+
+### 2. Provide the key to this application
+
+Pick **one** primary method (you can still override from the UI when allowed):
+
+| Method | What to do |
+| --- | --- |
+| **`.env` / Compose** | Set `ABACUS_API_KEY` in `.env` (see [Quick Start](#quick-start)) or under `environment:` in `compose.yaml`, then `docker compose up -d --build` (or restart the stack) so the container sees the new value. |
+| **Docker run** | Pass `-e ABACUS_API_KEY="..."` when starting the container. |
+| **Web UI** | Open **Settings**, enter the key, click **Test connection**. By default the key stays in **server memory only**. If you enable optional persistence, it is written under `/data/secrets/` inside the volume (see [Privacy and Security](#privacy-and-security)). |
+
+If `APP_ALLOW_UI_API_KEY` is set to `false`, API key entry in the UI is disabled and you must use environment configuration.
+
+### 3. Rotate or revoke a key
+
+1. In the Abacus.AI **API Keys** dashboard, **create a new key**.
+2. Update this app: change `ABACUS_API_KEY` in `.env` (and recreate the container), or enter the new key under **Settings** and **Test connection**.
+3. After backups work with the new key, **revoke or delete** the old key in the Abacus.AI dashboard so it cannot be misused.
+
+### 4. If the key stops working
+
+- Confirm the key was not rotated or expired on the Abacus.AI side.
+- After editing `.env`, **restart** the Docker container so the process reloads environment variables.
+- Use **Test connection** in the UI to surface SDK-level errors (for example missing methods for your account type).
+
 ## Usage
 
 ### 1. Connect
 
 1. Open the web UI.
-2. Enter an API key or use the key from `.env`.
-3. Click **Verbinden testen**.
+2. If you have not set `ABACUS_API_KEY` in the environment, create a key as described in [Abacus.AI API key: how to create and use it](#abacusai-api-key-how-to-create-and-use-it), then enter it under **Settings** (or set it in `.env` first).
+3. Click **Test connection**.
 4. The app discovers available Abacus SDK methods.
 
 API keys are never returned to the frontend. If entered in the UI, the key is kept in server memory by default. If you explicitly enable local persistence, it is stored under:
@@ -162,7 +210,7 @@ The app automatically tries to discover scopes through the official SDK:
 
 Some Abacus SDK/account setups require at least one scope for `list_deployment_conversations`. The official Abacus documentation lists `deploymentId`, `externalApplicationId`, and `conversationType` for `listDeploymentConversations`; in the Python SDK these are called as `deployment_id`, `external_application_id`, and `conversation_type`.
 
-If autodiscovery is not enough, go to **Einstellungen** and enter one or more manual values in:
+If autodiscovery is not enough, go to **Settings** and enter one or more manual values in:
 
 - Deployment IDs
 - External Application IDs
@@ -176,20 +224,20 @@ The values are stored locally in:
 
 ### 3. Load Chats
 
-Click **Chats laden** or **Refresh**. The app lists available AI chat sessions and deployment conversations.
+Click **Load chats** or **Refresh**. The app lists available AI chat sessions and deployment conversations.
 
-Long lists show the first **10** rows by default; use **Weitere … anzeigen** to expand the full filtered list. **Alle auswählen** still selects every row that matches the current filters, not only the visible rows.
+Long lists use **pagination**: choose **10**, **50**, or **100** rows per page under the table, with **Previous / Next** for additional pages. **Select all** still selects every row that matches the current filters, not only the visible page.
 
 ### 4. Select and Export
 
-1. Select individual chats or choose **Alle exportieren** (all exportable chats from the loaded list, independent of checkboxes).
+1. Select individual chats or choose **Export all** (all exportable chats from the loaded list, independent of checkboxes).
 2. Choose export formats: JSON, Markdown, HTML, Open WebUI.
-3. **ZIP erstellen**: when enabled, the server writes per-chat files first, then builds `backup.zip` at the **end** of the job (same folder contents, not a second export). When disabled, only loose files are written; the backup download endpoint can still create the ZIP on first download if needed.
+3. **Create ZIP**: when enabled, the server writes per-chat files first, then builds `backup.zip` at the **end** of the job (same folder contents, not a second export). When disabled, only loose files are written; the backup download endpoint can still create the ZIP on first download if needed.
 4. Start the export and watch job progress.
 
 ### 5. Download Backups
 
-Completed backups appear in **Backup-Historie**. You can:
+Completed backups appear in **Backup history**. You can:
 
 - view `manifest.json`
 - download ZIP
@@ -220,9 +268,11 @@ If no clear message list is found, Markdown contains a short note and JSON remai
 
 Best when the Abacus SDK provides an export method returning HTML or export content. If the SDK only returns metadata or a URL, metadata is stored and no external download is forced.
 
-In addition, **every HTML export** generates a readable transcript **`{title}_{id}_Konversation.html`** derived from the chat payload (same message detection as Markdown): alternating **Benutzer** vs **Assistent** (plus **System** when present), timestamps when available, and a short legend at the top. Use this file when you want to see who said what. **`Konversation.html` is styled for screen reading and for browser print / Save as PDF** (`@media print`, A4-oriented margins, page-break handling). For many **deployment** conversations, the API stores the assistant’s answer in nested **`segments`** (not in the top-level `text` field); the export flattens those so the preview matches the full thread. The **authoritative, lossless** copy of the session is still **`*.json`**, including `history` and all segment objects.
+**Conversation transcript (extra HTML file):** Whenever HTML is included in an export, the app also writes a **print-friendly transcript** per chat. The filename pattern is **`{title}_{id}_Konversation.html`**. The `_Konversation` part is a **legacy suffix** (from the German word *Konversation*) kept so existing backup paths and scripts keep working; the **inside of the file** (labels, hints, layout copy) is **English**, like the web UI.
 
-If you select **only HTML** as export format (JSON/Markdown unchecked), each chat produces **only** `*_Konversation.html` — no SDK `*_html.*` artifacts — ideal for a single handoff document (PDF/print). When HTML is combined with other formats, SDK artifacts (`*_html.*`) are still written alongside JSON/Markdown as needed.
+That transcript is derived from the chat payload (same message detection as Markdown): alternating **user** vs **assistant** (plus **system** when present), timestamps when available, and a short legend at the top. **Assistant bubbles** render a safe subset of Markdown (headings, lists, **bold**, links, blockquotes, and pipe tables) so long BOT replies with web-search style layout stay readable; user messages stay as plain pre-wrapped text. Use this file when you want to see who said what. It is styled for **screen reading** and for **browser print / Save as PDF** (`@media print`, A4-oriented margins, page-break handling). When printing, assistant paragraphs keep **explicit line breaks** from the export text (`white-space: pre-line`), while long lines wrap at **word boundaries** with hyphenation where the browser supports it; very long user lines still use `pre-wrap` with safe wrapping. For many **deployment** conversations, the API stores the assistant’s answer in nested **`segments`** (not in the top-level `text` field); the export flattens those so the preview matches the full thread. The **authoritative, lossless** copy of the session is still **`*.json`**, including `history` and all segment objects.
+
+If you select **only HTML** as export format (JSON/Markdown unchecked), each chat produces **only** the transcript file `*_Konversation.html` — no SDK `*_html.*` artifacts — ideal for a single handoff document (PDF/print). When HTML is combined with other formats, SDK artifacts (`*_html.*`) are still written alongside JSON/Markdown as needed.
 
 Files are written next to the other formats with a `*_html` stem: raw HTML (or text/binary when the response is not HTML) uses a normal extension (e.g. `.html`, `.txt`, `.bin`). When the SDK returns a structured object, the main document is `*_html.html` if HTML is embedded in the payload, and a sidecar `*_html.meta.json` holds the full structured response (not a misleading `*.export.json` name).
 
@@ -243,10 +293,10 @@ Best for portable backup packages. ZIP contains `manifest.json`, `errors.log`, a
 
 ## Technical Details
 
-- **Backend:** Python 3.11, FastAPI, Uvicorn
+- **Backend:** Python 3.11, FastAPI `>=0.115`, Uvicorn `>=0.30`, Pydantic `>=2.7`
 - **Frontend:** React, TypeScript, Vite, TailwindCSS
-- **Abacus SDK:** `abacusai`
-- **Database:** SQLite
+- **Abacus SDK:** `abacusai>=1.4`
+- **Database:** SQLite (via Python `sqlite3`, WAL mode)
 - **Backup storage:** `/data/backups`
 - **Container port:** `8080`
 - **Runtime command:** `uvicorn app.main:app --host 0.0.0.0 --port 8080`
@@ -270,34 +320,55 @@ flowchart LR
 .
 ├── Dockerfile
 ├── compose.yaml
+├── LICENSE
+├── SECURITY.md
+├── CHANGELOG.md
 ├── .env.example
+├── .gitignore
 ├── backend/
 │   ├── requirements.txt
 │   └── app/
-│       ├── main.py
-│       ├── abacus_client.py
-│       ├── backup_engine.py
-│       ├── exporters.py
-│       ├── database.py
-│       ├── jobs.py
-│       ├── security.py
-│       └── local_settings.py
+│       ├── main.py          — FastAPI routes, middleware, static SPA serving
+│       ├── models.py        — Pydantic models, APP_NAME, APP_VERSION
+│       ├── abacus_client.py — AbacusService wrapper around abacusai SDK
+│       ├── backup_engine.py — Export job runner, folder layout, manifest
+│       ├── exporters.py     — JSON/Markdown/HTML/Open WebUI/ZIP writers
+│       ├── database.py      — SQLite (jobs, backups, cached chats)
+│       ├── jobs.py          — JobManager (async wrapper, cancel flags)
+│       ├── config.py        — Settings dataclass, env variable parsing
+│       ├── security.py      — API key storage, masking, Basic Auth helpers
+│       ├── local_settings.py — Conversation scope file read/write helpers
+│       └── utils.py         — Date, filename, JSON, path utilities
 └── frontend/
     ├── package.json
     └── src/
+        ├── main.tsx
+        ├── App.tsx
+        ├── api.ts
+        ├── types.ts
+        └── components/
+            ├── Layout.tsx
+            ├── ChatTable.tsx
+            ├── ExportPanel.tsx
+            ├── JobProgress.tsx
+            ├── BackupHistory.tsx
+            ├── ApiKeyPanel.tsx
+            ├── ConnectionStatus.tsx
+            ├── ConversationScopesPanel.tsx
+            └── Toast.tsx
 ```
 
 ## API Endpoints
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/api/health` | Healthcheck |
+| `GET` | `/api/health` | Healthcheck (`app`, `version`) |
 | `POST` | `/api/connect` | Test API key and discover SDK methods |
 | `DELETE` | `/api/api-key` | Delete locally stored API key |
 | `GET` | `/api/status` | App status and config summary |
 | `GET` | `/api/conversation-scopes` | Read stored conversation scopes |
 | `PUT` | `/api/conversation-scopes` | Save conversation scopes |
-| `GET` | `/api/chats` | List chats |
+| `GET` | `/api/chats` | List chats (`include_ai_chat`, `include_deployments`, `refresh` query params) |
 | `POST` | `/api/export` | Start export job |
 | `GET` | `/api/jobs/{job_id}` | Read job progress |
 | `POST` | `/api/jobs/{job_id}/cancel` | Cancel job best-effort |
@@ -328,14 +399,14 @@ APP_BASIC_AUTH_PASSWORD=a-long-local-password
 
 ## Troubleshooting
 
-### "Deployment Conversations konnten nicht geladen werden"
+### "Could not load deployment conversations"
 
-Autodiscovery and manual scopes did not yield a usable SDK scope. Add at least one value in **Einstellungen**: Deployment ID, External Application ID, or Conversation Type.
+Autodiscovery and manual scopes did not yield a usable SDK scope. Add at least one value under **Settings**: deployment ID, external application ID, or conversation type.
 
-### "Nicht verbunden"
+### "Not connected"
 
-- Check the API key.
-- Click **Verbinden testen** again.
+- Follow [Abacus.AI API key: how to create and use it](#abacusai-api-key-how-to-create-and-use-it) to verify you have a valid key.
+- Click **Test connection** again.
 - If using `.env`, restart the container after changing it.
 
 ### No chats appear
@@ -403,13 +474,25 @@ docker build -t abacus-backup-manager:local .
 
 Contributions are welcome. Open an issue or submit a pull request with a clear description of the change.
 
+**Names on GitHub (for example next to the README or under “Contributors”):** Those come from **Git commit authors** (`git log`), not from the README text. Tools such as Cursor may commit as a separate identity (for example `cursoragent`). For **new** commits, set your identity in this repository: `git config user.name "Your Name"` and `git config user.email "your-email@example.com"` (use an address [verified on your GitHub account](https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-email-preferences/adding-an-email-address-to-your-github-account) so commits link to your profile). Changing authors on **old** commits rewrites history and is only reasonable before others have cloned the repo widely.
+
+### Maintainer: cutting a GitHub release
+
+1. Ensure `APP_VERSION` in `backend/app/models.py`, the README version badge, and `frontend/package.json` / `package-lock.json` match the release you are tagging.
+2. Update [CHANGELOG.md](CHANGELOG.md): move items from `[Unreleased]` into a dated section with the new version (Keep a clean `[Unreleased]` heading for follow-up work).
+3. Run checks locally: `npm run build` in `frontend/`, Docker image build if you ship containers.
+4. Tag and push: `git tag -a vX.Y.Z -m "Release X.Y.Z"` then `git push origin vX.Y.Z` (replace `X.Y.Z` with the version).
+5. On GitHub: **Releases** → **Draft a new release** → choose the tag, set the title to `X.Y.Z`, and paste the matching section from the changelog as release notes. Attach binaries only if you publish artifacts; the default flow is tag plus source archive.
+
 ## Changelog
 
 Release history and notable changes: see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-No license file is included yet. Add a `LICENSE` file before publishing the project publicly.
+This project is licensed under the [MIT License](LICENSE). You may use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software, subject to the conditions in that file.
+
+Vulnerability reporting: [SECURITY.md](SECURITY.md).
 
 ## Support
 

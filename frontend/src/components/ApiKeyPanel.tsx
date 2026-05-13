@@ -30,9 +30,9 @@ export default function ApiKeyPanel({ status, connection, onConnect, onForgetSto
       await onConnect(showInput ? apiKey : undefined, showInput ? rememberLocally : false);
       setApiKey("");
       setRememberLocally(false);
-      setMessage("Verbindung erfolgreich getestet.");
+      setMessage("Connection test succeeded.");
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Verbindung fehlgeschlagen.");
+      setError(exc instanceof Error ? exc.message : "Connection failed.");
     } finally {
       setBusy(false);
     }
@@ -44,9 +44,9 @@ export default function ApiKeyPanel({ status, connection, onConnect, onForgetSto
     setMessage(null);
     try {
       await onForgetStoredKey();
-      setMessage("Lokal gespeicherter API-Key wurde geloescht.");
+      setMessage("Stored API key was removed.");
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "API-Key konnte nicht geloescht werden.");
+      setError(exc instanceof Error ? exc.message : "Could not remove API key.");
     } finally {
       setBusy(false);
     }
@@ -58,14 +58,14 @@ export default function ApiKeyPanel({ status, connection, onConnect, onForgetSto
         <div>
           <div className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-emerald-700" />
-            <h2 className="text-lg font-semibold">API-Key</h2>
+            <h2 className="text-lg font-semibold">API key</h2>
           </div>
           <p className="mt-2 text-sm text-zinc-600">
-            Standard: API-Key nur im Server-RAM. Optional kann er lokal im Docker Volume gespeichert werden.
+            Default: API key only in server memory. Optionally store it in the Docker volume.
           </p>
           {hasStoredKey && (
             <p className="mt-1 text-sm font-medium text-amber-800">
-              Ein lokal gespeicherter API-Key ist vorhanden.
+              A locally stored API key is present.
             </p>
           )}
         </div>
@@ -73,12 +73,12 @@ export default function ApiKeyPanel({ status, connection, onConnect, onForgetSto
           {connection?.connected ? (
             <span className="inline-flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-1.5 font-medium text-emerald-800">
               <CheckCircle2 className="h-4 w-4" />
-              Verbunden ueber {connection.source === "env" ? ".env" : connection.source === "stored" ? "lokalen Speicher" : "UI"}
+              Connected via {connection.source === "env" ? ".env" : connection.source === "stored" ? "local storage" : "UI"}
             </span>
           ) : (
             <span className="inline-flex items-center gap-2 rounded-md bg-amber-50 px-3 py-1.5 font-medium text-amber-900">
               <ShieldAlert className="h-4 w-4" />
-              Nicht verbunden
+              Not connected
             </span>
           )}
         </div>
@@ -91,12 +91,12 @@ export default function ApiKeyPanel({ status, connection, onConnect, onForgetSto
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}
             autoComplete="off"
-            placeholder="Abacus.AI API-Key eingeben"
+            placeholder="Enter Abacus.AI API key"
             className="min-h-11 rounded-md border border-zinc-300 px-3 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
           />
         ) : (
           <div className="flex min-h-11 items-center rounded-md border border-zinc-300 px-3 text-sm text-zinc-700">
-            {hasEnvKey ? "Environment API-Key vorhanden" : "Lokaler API-Key vorhanden"}
+            {hasEnvKey ? "Environment API key present" : "Local API key present"}
           </div>
         )}
         <button
@@ -105,7 +105,7 @@ export default function ApiKeyPanel({ status, connection, onConnect, onForgetSto
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-          Verbinden testen
+          Test connection
         </button>
       </form>
 
@@ -117,7 +117,7 @@ export default function ApiKeyPanel({ status, connection, onConnect, onForgetSto
             onChange={(event) => setOverrideKey(event.target.checked)}
             className="h-4 w-4 rounded border-zinc-300 text-emerald-700"
           />
-          Mit anderem UI-Key verbinden
+          Connect with a different UI key
         </label>
       )}
 
@@ -130,8 +130,8 @@ export default function ApiKeyPanel({ status, connection, onConnect, onForgetSto
             className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-amber-700"
           />
           <span>
-            Dauerhaft lokal speichern. Unsicher/lokal: Der Key wird im Docker Volume unter{" "}
-            <span className="font-mono">/data/secrets</span> abgelegt.
+            Persist locally. Less secure: the key is written to the Docker volume under{" "}
+            <span className="font-mono">/data/secrets</span>.
           </span>
         </label>
       )}
@@ -143,7 +143,7 @@ export default function ApiKeyPanel({ status, connection, onConnect, onForgetSto
           onClick={() => void handleForget()}
           className="mt-3 text-sm font-semibold text-red-700 hover:text-red-800 disabled:opacity-60"
         >
-          Gespeicherten API-Key loeschen
+          Remove stored API key
         </button>
       )}
       {message && <p className="mt-3 text-sm font-medium text-emerald-700">{message}</p>}
