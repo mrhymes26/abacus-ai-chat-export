@@ -2,10 +2,31 @@ from __future__ import annotations
 
 import concurrent.futures
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 DETAIL_TIMEOUT_SECONDS = 120
+
+T = TypeVar("T")
+
+
+def _call_with_timeout(func: Callable[..., T], *args: Any, timeout: int = DETAIL_TIMEOUT_SECONDS) -> T:
+    """Run a blocking SDK call with a timeout.
+
+    Important: ThreadPoolExecutor context managers call shutdown(wait=True) on exit,
+    which would block forever if the worker thread is stuck on a hung API call.
+    On timeout we shut down with wait=False so the backup job can continue.
+    """
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = pool.submit(func, *args)
+    try:
+        return future.result(timeout=timeout)
+    except concurrent.futures.TimeoutError:
+        pool.shutdown(wait=False, cancel_futures=True)
+        raise
+    else:
+        pool.shutdown(wait=True)
 
 from .abacus_client import AbacusService
 from .config import get_settings
@@ -69,9 +90,7 @@ def run_backup_job(
             detail: Any = item.raw_preview or {}
 
             try:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(abacus_service.get_chat_detail, item)
-                    detail = future.result(timeout=DETAIL_TIMEOUT_SECONDS)
+                detail = _call_with_timeout(abacus_service.get_chat_detail, item)
             except concurrent.futures.TimeoutError:
                 item_errors.append(
                     f"{item.type}:{item.id}: Failed to fetch detail: "
@@ -121,20 +140,7 @@ def run_backup_job(
             if "html" in request.formats:
                 # Nur Format „HTML“: ein einziges druckfähiges Konversationsdokument — ohne SDK-Roh-Export
                 conversation_only = set(request.formats) == {"html"}
-                if not conversation_only:
-                    try:
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                            future = pool.submit(abacus_service.export_chat_html, item)
-                            export_result = future.result(timeout=DETAIL_TIMEOUT_SECONDS)
-                        item_files.extend(write_export_result(export_result, path_base.with_name(path_base.name + "_html")))
-                    except concurrent.futures.TimeoutError:
-                        item_errors.append(
-                            f"{item.type}:{item.id}: HTML export timed out after {DETAIL_TIMEOUT_SECONDS}s — skipped."
-                        )
-                    except AttributeError as exc:
-                        item_errors.append(f"{item.type}:{item.id}: HTML export not available: {safe_error(exc)}")
-                    except Exception as exc:
-                        item_errors.append(f"{item.type}:{item.id}: HTML export failed: {safe_error(exc)}")
+                # Transcript first (local, from detail already fetched) — do not block on SDK export_deployment_conversation
                 try:
                     item_files.append(
                         write_conversation_readout_html(
@@ -149,6 +155,18 @@ def run_backup_job(
                     )
                 except Exception as exc:
                     item_errors.append(f"{item.type}:{item.id}: Conversation HTML (readout) failed: {safe_error(exc)}")
+                if not conversation_only:
+                    try:
+                        export_result = _call_with_timeout(abacus_service.export_chat_html, item)
+                        item_files.extend(write_export_result(export_result, path_base.with_name(path_base.name + "_html")))
+                    except concurrent.futures.TimeoutError:
+                        item_errors.append(
+                            f"{item.type}:{item.id}: HTML export timed out after {DETAIL_TIMEOUT_SECONDS}s — skipped."
+                        )
+                    except AttributeError as exc:
+                        item_errors.append(f"{item.type}:{item.id}: HTML export not available: {safe_error(exc)}")
+                    except Exception as exc:
+                        item_errors.append(f"{item.type}:{item.id}: HTML export failed: {safe_error(exc)}")
 
             if not item_files:
                 failed += 1

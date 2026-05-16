@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Export hang after timeout:** `ThreadPoolExecutor` used `shutdown(wait=True)` on exit, so a timed-out Abacus SDK call still blocked the job forever. Timeouts now use `shutdown(wait=False)` so the backup continues.
+- **HTML export order:** Conversation transcript (`*_Konversation.html`) is written before the optional SDK `export_deployment_conversation` call, so deployment chats still get a readable HTML file when the SDK export hangs.
+
 ### Added
 
 - **API timeout handling:** Each `get_chat_detail` and `export_chat_html` SDK call has a 120-second timeout. If the Abacus API does not respond in time, the item is skipped and the job continues with the next chat.
