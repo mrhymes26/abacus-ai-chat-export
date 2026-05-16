@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Timed-out export summary:** Jobs record `timed_out_items` (id, title, deployment, failed step) in `result_json` and `manifest.json`. After the job finishes, the UI shows a summary list and a **Retry timed-out items** button.
+
 ### Fixed
 
 - **Export hang after timeout:** `ThreadPoolExecutor` used `shutdown(wait=True)` on exit, so a timed-out Abacus SDK call still blocked the job forever. Timeouts now use `shutdown(wait=False)` so the backup continues.

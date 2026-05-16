@@ -65,6 +65,7 @@ def run_backup_job(
     ai_dir = backup_dir / "ai_chat_sessions"
     deployment_dir = backup_dir / "deployment_conversations"
     errors: list[str] = []
+    timed_out_items: list[dict[str, Any]] = []
     manifest_items: list[dict[str, Any]] = []
     openwebui_chats: list[dict[str, Any]] = []
 
@@ -96,6 +97,7 @@ def run_backup_job(
                     f"{item.type}:{item.id}: Failed to fetch detail: "
                     f"Timeout after {DETAIL_TIMEOUT_SECONDS}s — skipping this item."
                 )
+                timed_out_items.append(_timed_out_record(item, "detail"))
             except Exception as exc:
                 item_errors.append(f"{item.type}:{item.id}: Failed to fetch detail: {safe_error(exc)}")
             export_stats = conversation_export_stats(detail)
@@ -163,6 +165,7 @@ def run_backup_job(
                         item_errors.append(
                             f"{item.type}:{item.id}: HTML export timed out after {DETAIL_TIMEOUT_SECONDS}s — skipped."
                         )
+                        timed_out_items.append(_timed_out_record(item, "html_export"))
                     except AttributeError as exc:
                         item_errors.append(f"{item.type}:{item.id}: HTML export not available: {safe_error(exc)}")
                     except Exception as exc:
@@ -199,6 +202,7 @@ def run_backup_job(
             "counts": counts,
             "items": manifest_items,
             "errors": errors,
+            "timed_out_items": timed_out_items,
             "index_html": "index.html",
         }
         if "openwebui" in request.formats and openwebui_chats:
@@ -225,6 +229,7 @@ def run_backup_job(
             "backup_path": str(backup_dir),
             "zip_path": str(zip_path) if zip_path else None,
             "download_url": f"/api/backups/{backup_id}/download",
+            "timed_out_items": timed_out_items,
         }
         db.update_job(job_id, status=final_status, current_item=None, result_json=result, errors_json=errors)
     except Exception as exc:
@@ -268,6 +273,16 @@ def _request_conversation_scopes(request: ExportRequest) -> list[dict[str, str]]
     scopes.extend({"external_application_id": value} for value in request.external_application_ids if value)
     scopes.extend({"conversation_type": value} for value in request.conversation_types if value)
     return scopes
+
+
+def _timed_out_record(item: ChatItem, step: str) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "type": item.type,
+        "title": item.title,
+        "deployment_id": item.deployment_id,
+        "step": step,
+    }
 
 
 def _path_base_for_item(item: ChatItem, directory: Path) -> Path:

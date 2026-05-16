@@ -158,6 +158,24 @@ export default function App() {
     }
   }
 
+  async function handleRetry(chatIds: string[]) {
+    if (chatIds.length === 0 || exporting) return;
+    try {
+      const result = await startExport({
+        mode: "selected",
+        chatIds,
+        formats: ["json", "markdown", "html"],
+        zip: true
+      });
+      const nextJob = await getJob(result.job_id);
+      setJob(nextJob);
+      setSelectedIds(new Set(chatIds));
+      addToast("success", `Retry export started for ${chatIds.length} timed-out item(s).`);
+    } catch (exc) {
+      addToast("error", exc instanceof Error ? exc.message : "Could not start retry export.");
+    }
+  }
+
   async function handleCancel(jobId: string) {
     try {
       await cancelJob(jobId);
@@ -195,7 +213,7 @@ export default function App() {
               loading={loadingChats}
             />
             <ExportPanel selectedCount={selectedCount} busy={exporting} onStart={handleStartExport} />
-            <JobProgress job={job} onCancel={handleCancel} />
+            <JobProgress job={job} onCancel={handleCancel} onRetry={handleRetry} retryBusy={exporting} />
           </>
         )}
 

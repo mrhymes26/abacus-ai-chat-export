@@ -80,7 +80,16 @@ export interface BackupJob {
     backup_path?: string;
     zip_path?: string | null;
     download_url?: string;
+    timed_out_items?: TimedOutItem[];
   } | null;
+}
+
+export interface TimedOutItem {
+  id: string;
+  type: ChatType;
+  title?: string | null;
+  deployment_id?: string | null;
+  step: "detail" | "html_export";
 }
 
 export interface BackupSummary {
