@@ -62,6 +62,11 @@ class Database:
         conn.row_factory = sqlite3.Row
         return conn
 
+    def ping(self) -> None:
+        """Lightweight liveness probe for health checks (raises on failure)."""
+        with self._connect() as conn:
+            conn.execute("SELECT 1").fetchone()
+
     def mark_interrupted_jobs(self) -> None:
         now = now_utc_iso()
         with self._lock, self._connect() as conn:

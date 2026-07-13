@@ -17,11 +17,24 @@ services:
     volumes:
       - abacus_backup_data:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import base64, os, urllib.request; req=urllib.request.Request('http://127.0.0.1:8080/api/health'); u=os.getenv('APP_BASIC_AUTH_USER'); p=os.getenv('APP_BASIC_AUTH_PASSWORD'); req.add_header('Authorization', 'Basic ' + base64.b64encode(f'{u}:{p}'.encode()).decode()) if u and p else None; urllib.request.urlopen(req, timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=2)"]
       interval: 30s
-      timeout: 5s
+      timeout: 3s
       retries: 3
-      start_period: 10s
+      start_period: 20s
+    labels:
+      homelab.enable: "true"
+      homelab.name: "Abacus Chat Backup"
+      homelab.slug: "app-abacus-chat-backup"
+      homelab.port: "8080"
+      homelab.group: "Tools"
+      homelab.description: "Backup & export manager for Abacus.AI chat conversations"
+      homelab.icon: "mdi:chat-outline"
+      homelab.health: "/api/health"
+      homelab.version: "${APP_VERSION:-dev}"
+      homelab.tags: "backup,abacus,fastapi,export"
+      homelab.order: "50"
+      homelab.hidden: "false"
 
 volumes:
   abacus_backup_data:

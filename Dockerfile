@@ -22,6 +22,9 @@ COPY --from=frontend-build /app/frontend/dist /app/static
 RUN mkdir -p /data/backups
 
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD python -c "import base64, os, urllib.request; req=urllib.request.Request('http://127.0.0.1:8080/api/health'); u=os.getenv('APP_BASIC_AUTH_USER'); p=os.getenv('APP_BASIC_AUTH_PASSWORD'); req.add_header('Authorization', 'Basic ' + base64.b64encode(f'{u}:{p}'.encode()).decode()) if u and p else None; urllib.request.urlopen(req, timeout=5)"
+# /api/health is public (exempt from basic auth); python:slim ships no wget/curl,
+# so probe with a stdlib one-liner. Non-2xx (e.g. 503 = down) raises -> unhealthy.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=2)" || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

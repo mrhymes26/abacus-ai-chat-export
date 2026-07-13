@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import os
 import shutil
+import time
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request, Response
@@ -51,10 +54,18 @@ abacus_service = AbacusService()
 app = FastAPI(title=APP_NAME)
 job_manager = None
 
+# Process start reference for uptime reporting on the health endpoint.
+_START_TIME = time.monotonic()
+# Optional build metadata; never invented — only surfaced if provided by the env.
+_APP_COMMIT = os.getenv("APP_COMMIT") or os.getenv("GIT_COMMIT") or None
+# Public allow-list: paths that must stay reachable without basic auth
+# (HomeLAB_UX health polling, container HEALTHCHECK).
+_PUBLIC_PATHS = frozenset({"/api/health"})
+
 
 @app.middleware("http")
 async def optional_basic_auth(request: Request, call_next):
-    if settings.basic_auth_enabled:
+    if settings.basic_auth_enabled and request.url.path not in _PUBLIC_PATHS:
         if not basic_auth_matches(
             request.headers.get("authorization"),
             settings.basic_auth_user or "",
@@ -82,9 +93,44 @@ async def startup() -> None:
     job_manager.startup()
 
 
+_STATUS_RANK = {"ok": 0, "degraded": 1, "down": 2}
+
+
+async def _check_database() -> dict[str, object]:
+    """Mandatory dependency: local SQLite store. Timeout-guarded, never blocks."""
+    start = time.monotonic()
+    status = "ok"
+    try:
+        await asyncio.wait_for(asyncio.to_thread(db.ping), timeout=2.0)
+    except Exception:
+        status = "down"
+    return {
+        "name": "database",
+        "status": status,
+        "latency_ms": round((time.monotonic() - start) * 1000, 1),
+    }
+
+
 @app.get("/api/health")
-async def health() -> dict[str, object]:
-    return {"ok": True, "app": APP_NAME, "version": APP_VERSION}
+async def health() -> JSONResponse:
+    checks = await asyncio.gather(_check_database())
+    overall = "ok"
+    for check in checks:
+        if _STATUS_RANK[check["status"]] > _STATUS_RANK[overall]:
+            overall = check["status"]
+    body: dict[str, object] = {
+        "status": overall,
+        "version": APP_VERSION,
+        "uptime_s": int(time.monotonic() - _START_TIME),
+        "checks": list(checks),
+    }
+    if _APP_COMMIT:
+        body["commit"] = _APP_COMMIT
+    return JSONResponse(
+        status_code=503 if overall == "down" else 200,
+        content=body,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.post("/api/connect", response_model=ConnectionResult)
