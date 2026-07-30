@@ -21,6 +21,11 @@ COPY --from=frontend-build /app/frontend/dist /app/static
 
 RUN mkdir -p /data/backups
 
+# Run unprivileged: /data holds the SQLite DB, the API key file and the backups.
+RUN adduser --system --group app \
+  && chown -R app:app /data /app
+USER app
+
 EXPOSE 8080
 # /api/health is public (exempt from basic auth); python:slim ships no wget/curl,
 # so probe with a stdlib one-liner. Non-2xx (e.g. 503 = down) raises -> unhealthy.

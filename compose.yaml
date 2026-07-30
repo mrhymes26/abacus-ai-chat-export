@@ -3,7 +3,12 @@ services:
     build: .
     container_name: abacus-backup-manager
     ports:
-      - "8080:8080"
+      # Loopback-only by default: the API is unauthenticated unless
+      # APP_BASIC_AUTH_USER/PASSWORD are set. Change to "8080:8080" only
+      # together with basic auth (or behind a reverse proxy).
+      - "127.0.0.1:8080:8080"
+    security_opt:
+      - no-new-privileges:true
     environment:
       ABACUS_API_KEY: ${ABACUS_API_KEY:-}
       ABACUS_DEPLOYMENT_IDS: ${ABACUS_DEPLOYMENT_IDS:-}

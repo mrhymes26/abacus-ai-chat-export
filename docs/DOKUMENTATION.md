@@ -7,7 +7,7 @@
 | Projekt | `app-abacus-chat-backup` |
 | Pfad | `app-abacus-chat-backup/` |
 | Version | NICHT ERMITTELBAR (Quelle: `kein Manifest mit Versionsfeld gefunden`) |
-| Git-Commit | `73f2b41` |
+| Git-Commit | `227a495` |
 | Branch | `main` |
 | Generiert am | 2026-07-30 |
 | Teildokumente | 12 von 12 |

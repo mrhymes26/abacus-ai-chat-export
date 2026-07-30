@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import shutil
 import time
@@ -51,7 +52,11 @@ db = Database(settings.db_path)
 abacus_service = AbacusService()
 
 
-app = FastAPI(title=APP_NAME)
+logger = logging.getLogger("app")
+
+# Interactive API docs are off: with basic auth disabled they would expose the
+# full API surface to anyone who reaches the port.
+app = FastAPI(title=APP_NAME, docs_url=None, redoc_url=None, openapi_url=None)
 job_manager = None
 
 # Process start reference for uptime reporting on the health endpoint.
@@ -61,6 +66,22 @@ _APP_COMMIT = os.getenv("APP_COMMIT") or os.getenv("GIT_COMMIT") or None
 # Public allow-list: paths that must stay reachable without basic auth
 # (HomeLAB_UX health polling, container HEALTHCHECK).
 _PUBLIC_PATHS = frozenset({"/api/health"})
+
+# Second line of defence for the self-served React bundle and for anything the
+# HTML exporter renders. Everything is same-origin, so 'self' is sufficient;
+# 'unsafe-inline' for styles is required by React's inline style attributes.
+_CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "font-src 'self' data:; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
 
 
 @app.middleware("http")
@@ -79,9 +100,42 @@ async def optional_basic_auth(request: Request, call_next):
     return await call_next(request)
 
 
+# Registered after the auth middleware, therefore the outer layer: the headers
+# are also set on 401 responses produced above.
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Content-Security-Policy", _CONTENT_SECURITY_POLICY)
+    return response
+
+
+def _check_auth_config() -> None:
+    """Fail loudly on half-configured basic auth instead of silently staying open."""
+    user_set = bool(settings.basic_auth_user)
+    password_set = bool(settings.basic_auth_password)
+    if user_set != password_set:
+        missing = "APP_BASIC_AUTH_PASSWORD" if user_set else "APP_BASIC_AUTH_USER"
+        raise RuntimeError(
+            f"Basic auth is only half configured: {missing} is empty. "
+            "Set APP_BASIC_AUTH_USER and APP_BASIC_AUTH_PASSWORD together, "
+            "or leave both empty to run without authentication."
+        )
+    if settings.basic_auth_enabled:
+        logger.info("Basic auth ACTIVE (public paths: %s).", ", ".join(sorted(_PUBLIC_PATHS)))
+    else:
+        logger.warning(
+            "Basic auth DISABLED - the API is open, including chat backup downloads. "
+            "Keep the port bound to 127.0.0.1 or set APP_BASIC_AUTH_USER/APP_BASIC_AUTH_PASSWORD."
+        )
+
+
 @app.on_event("startup")
 async def startup() -> None:
     global job_manager
+    _check_auth_config()
     ensure_dir(settings.data_dir)
     ensure_dir(settings.backups_dir)
     ensure_dir(settings.secrets_dir)
