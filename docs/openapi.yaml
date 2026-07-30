@@ -1,0 +1,741 @@
+openapi: 3.1.0
+
+# Aus dem Code erzeugt am 2026-07-30. Quelle: backend/app/main.py (Routen),
+# backend/app/models.py (Schemata). Im Projekt existierte keine OpenAPI-Spezifikation;
+# die eingebaute FastAPI-Spec ist bewusst abgeschaltet (main.py:59).
+# Es sind ausschliesslich Endpunkte enthalten, die im Code belegt sind.
+
+info:
+  title: Abacus Backup Chat Export Manager
+  version: 1.0.0
+  description: >-
+    Lokaler Backup- und Export-Manager fuer Abacus.AI-Chatkonversationen.
+    Alle Endpunkte liegen unter demselben Origin wie die ausgelieferte React-Oberflaeche.
+    Basic-Auth ist optional und nur aktiv, wenn APP_BASIC_AUTH_USER und
+    APP_BASIC_AUTH_PASSWORD beide gesetzt sind (backend/app/config.py:29-31).
+    Einziger von der Auth ausgenommener Pfad ist /api/health (backend/app/main.py:66-68).
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: http://127.0.0.1:8080
+    description: Standardbetrieb laut compose.yaml (Loopback-Bindung)
+
+security:
+  - basicAuth: []
+
+tags:
+  - name: health
+  - name: connection
+  - name: scopes
+  - name: chats
+  - name: jobs
+  - name: backups
+
+paths:
+  /api/health:
+    get:
+      tags: [health]
+      operationId: health
+      summary: Liveness und SQLite-Ping
+      description: >-
+        Oeffentlich erreichbar, auch bei aktiver Basic-Auth. Prueft die SQLite-Datenbank
+        mit einem 2-Sekunden-Timeout. Beleg: backend/app/main.py:153-187.
+      security: []
+      responses:
+        '200':
+          description: Alle Pruefungen ok oder degraded
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+        '503':
+          description: Mindestens eine Pruefung meldet "down"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/connect:
+    post:
+      tags: [connection]
+      operationId: connect
+      summary: Verbindung zu Abacus.AI herstellen
+      description: >-
+        Ohne Body wird der API-Key aus der Umgebung oder aus der gespeicherten Datei
+        genutzt. Mit api_key wird der uebergebene Schluessel verwendet und bei
+        remember_locally zusaetzlich unter /data/secrets/abacus_api_key.local abgelegt.
+        Beleg: backend/app/main.py:190-211.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConnectRequest' }
+      responses:
+        '200':
+          description: Verbindung hergestellt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectionResult' }
+        '400':
+          description: >-
+            Verbindung fehlgeschlagen (Fehlertext ist um registrierte Secrets bereinigt)
+            oder remember_locally ohne api_key
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >-
+            APP_ALLOW_UI_API_KEY=false bei uebergebenem api_key, oder
+            APP_ALLOW_PERSISTENT_API_KEY=false bei remember_locally
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/status:
+    get:
+      tags: [connection]
+      operationId: getStatus
+      summary: Zustandsbild fuer die Oberflaeche
+      description: >-
+        Nebenwirkung: versucht eine stille Verbindung und startet bei Bedarf eine
+        Scope-Discovery gegen die Abacus-API. Fehler werden dabei verschluckt.
+        Beleg: backend/app/main.py:214-234.
+      responses:
+        '200':
+          description: Statusbild
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatusResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/api-key:
+    delete:
+      tags: [connection]
+      operationId: forgetStoredApiKey
+      summary: Lokal gespeicherten API-Key loeschen
+      description: 'Beleg: backend/app/main.py:237-240.'
+      responses:
+        '200':
+          description: deleted=true, wenn eine Datei entfernt wurde
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: boolean }
+                required: [deleted]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/conversation-scopes:
+    get:
+      tags: [scopes]
+      operationId: getConversationScopes
+      summary: Gespeicherte Scopes lesen
+      description: 'Beleg: backend/app/main.py:243-245.'
+      responses:
+        '200':
+          description: Inhalt von /data/settings/conversation_scopes.json
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationScopes' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [scopes]
+      operationId: putConversationScopes
+      summary: Scopes vollstaendig ersetzen
+      description: >-
+        Strings werden an Leerzeichen, Komma und Semikolon aufgetrennt und getrimmt.
+        Beleg: backend/app/main.py:248-250, backend/app/models.py:67-83.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationScopes' }
+      responses:
+        '200':
+          description: Normalisierter, gespeicherter Stand
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationScopes' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/chats:
+    get:
+      tags: [chats]
+      operationId: listChats
+      summary: Konversationen auflisten
+      description: >-
+        Ohne refresh wird der SQLite-Cache ohne Altersbegrenzung geliefert; die Antwort
+        traegt dann die Warnung "Loaded from local cache.". Mit refresh=true wird frisch
+        geladen und der Cache ersetzt. Beleg: backend/app/main.py:253-276.
+      parameters:
+        - name: include_ai_chat
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+          description: Allgemeine KI-Chats einbeziehen
+        - name: include_deployments
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+          description: Deployment-Konversationen einbeziehen
+        - name: refresh
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: Cache umgehen und neu laden
+      responses:
+        '200':
+          description: Liste mit Zaehlern und Warnungen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatListResponse' }
+        '400':
+          description: Nicht verbunden oder SDK-Fehler
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/export:
+    post:
+      tags: [jobs]
+      operationId: startExport
+      summary: Backup-Job starten
+      description: >-
+        Legt den Job an und kehrt sofort zurueck; der Lauf erfolgt im Hintergrund.
+        Fuer mode=selected muessen chat_ids die kanonischen Schluessel
+        "type:deployment_id_or_empty:id" enthalten
+        (backend/app/backup_engine.py:260-267).
+        Beleg: backend/app/main.py:279-288.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExportRequest' }
+      responses:
+        '200':
+          description: Job angelegt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportStartResponse' }
+        '400':
+          description: mode=selected ohne chat_ids, leere formats, oder nicht verbunden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          description: Job-Manager noch nicht initialisiert
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/jobs/{job_id}:
+    get:
+      tags: [jobs]
+      operationId: getJob
+      summary: Jobstatus abfragen
+      description: 'Beleg: backend/app/main.py:291-296, backend/app/database.py:125-144.'
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Aktueller Jobzustand
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupJob' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/jobs/{job_id}/cancel:
+    post:
+      tags: [jobs]
+      operationId: cancelJob
+      summary: Job abbrechen
+      description: >-
+        Setzt das Abbruchflag; der Lauf endet nach dem aktuellen Item.
+        Beleg: backend/app/main.py:299-304, backend/app/jobs.py:51-60.
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Abbruch angefordert
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cancelled: { type: boolean, const: true }
+                required: [cancelled]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/backups:
+    get:
+      tags: [backups]
+      operationId: listBackups
+      summary: Sicherungen auflisten
+      description: >-
+        Sortiert nach created_at absteigend; size_bytes wird bei jedem Aufruf durch
+        Aufsummieren des Verzeichnisses berechnet.
+        Beleg: backend/app/main.py:307-309, backend/app/database.py:163-182.
+      responses:
+        '200':
+          description: Liste aller Sicherungen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupListResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/backups/{backup_id}/manifest:
+    get:
+      tags: [backups]
+      operationId: getManifest
+      summary: Manifest einer Sicherung
+      description: >-
+        Liefert manifest.json von der Platte; fehlt die Datei, das in der Datenbank
+        hinterlegte Manifest. Beleg: backend/app/main.py:312-318.
+      parameters:
+        - $ref: '#/components/parameters/BackupId'
+      responses:
+        '200':
+          description: Manifest als JSON
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupManifest' }
+        '400':
+          description: Pfad liegt ausserhalb des Backup-Wurzelverzeichnisses
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/backups/{backup_id}/download:
+    get:
+      tags: [backups]
+      operationId: downloadBackup
+      summary: Sicherung als ZIP herunterladen
+      description: >-
+        Existiert noch kein ZIP, wird es beim ersten Aufruf erzeugt und der Pfad in der
+        Datenbank vermerkt. Beleg: backend/app/main.py:321-333.
+      parameters:
+        - $ref: '#/components/parameters/BackupId'
+      responses:
+        '200':
+          description: ZIP-Datei
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        '400':
+          description: Pfad liegt ausserhalb des Backup-Wurzelverzeichnisses
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/backups/{backup_id}:
+    delete:
+      tags: [backups]
+      operationId: deleteBackup
+      summary: Sicherung loeschen
+      description: >-
+        Entfernt Verzeichnis und Datenbankeintrag. Ohne confirm=true wird mit 400
+        abgelehnt. Beleg: backend/app/main.py:336-345.
+      parameters:
+        - $ref: '#/components/parameters/BackupId'
+        - name: confirm
+          in: query
+          required: true
+          schema: { type: boolean, default: false }
+          description: Muss true sein, sonst 400
+      responses:
+        '200':
+          description: Geloescht
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: boolean, const: true }
+                required: [deleted]
+        '400':
+          description: confirm fehlt oder Pfadpruefung fehlgeschlagen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: >-
+        Nur aktiv, wenn APP_BASIC_AUTH_USER und APP_BASIC_AUTH_PASSWORD beide gesetzt
+        sind. Sind beide leer, ist die API vollstaendig offen.
+
+  parameters:
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      description: UUID4, vergeben in backend/app/jobs.py:27
+    BackupId:
+      name: backup_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^abacus_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}_[0-9a-f]{1,8}$'
+      description: >-
+        Aufbau abacus_<UTC-Zeitstempel>_<Kurz-ID des Jobs>,
+        gebildet in backend/app/backup_engine.py:63
+
+  responses:
+    Unauthorized:
+      description: Basic-Auth aktiv und Zugangsdaten fehlen oder passen nicht
+      headers:
+        WWW-Authenticate:
+          schema: { type: string, const: Basic }
+      content:
+        text/plain:
+          schema: { type: string, const: Authentication required }
+    NotFound:
+      description: Ressource nicht gefunden
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Schemafehler der Anfrage (FastAPI-Standardformat)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    loc:
+                      type: array
+                      items: { type: [string, integer] }
+                    msg: { type: string }
+                    type: { type: string }
+
+  schemas:
+    Error:
+      type: object
+      description: FastAPI-HTTPException. Der Text ist um registrierte Secrets bereinigt.
+      properties:
+        detail: { type: string }
+      required: [detail]
+
+    HealthCheck:
+      type: object
+      properties:
+        name: { type: string, const: database }
+        status: { type: string, enum: [ok, degraded, down] }
+        latency_ms: { type: number }
+      required: [name, status, latency_ms]
+
+    HealthResponse:
+      type: object
+      properties:
+        status: { type: string, enum: [ok, degraded, down] }
+        version: { type: string, const: '1.0.0' }
+        uptime_s: { type: integer, minimum: 0 }
+        checks:
+          type: array
+          items: { $ref: '#/components/schemas/HealthCheck' }
+        commit:
+          type: string
+          description: Nur vorhanden, wenn APP_COMMIT oder GIT_COMMIT gesetzt ist
+      required: [status, version, uptime_s, checks]
+
+    ConnectRequest:
+      type: object
+      properties:
+        api_key:
+          type: [string, 'null']
+          description: Nur erlaubt, wenn APP_ALLOW_UI_API_KEY aktiv ist. Wird nie geloggt.
+        remember_locally:
+          type: boolean
+          default: false
+          description: Speichert den Schluessel als Datei mit chmod 0600
+      additionalProperties: false
+
+    ConnectionResult:
+      type: object
+      properties:
+        connected: { type: boolean }
+        source: { type: string, enum: [ui, env, stored, none], default: none }
+        persisted: { type: boolean, default: false }
+        available_methods:
+          type: array
+          items: { type: string }
+          description: SDK-Methoden aus der Kandidatenliste, die der Client kennt
+        missing_methods:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+      required: [connected]
+
+    StatusResponse:
+      type: object
+      properties:
+        has_env_api_key: { type: boolean }
+        has_stored_api_key: { type: boolean }
+        allow_persistent_api_key: { type: boolean }
+        connected: { type: boolean }
+        deployment_ids:
+          type: array
+          items: { type: string }
+        conversation_scopes:
+          $ref: '#/components/schemas/ScopeSummary'
+        stored_conversation_scopes:
+          $ref: '#/components/schemas/ScopeSummary'
+        data_dir: { type: string }
+      required:
+        [has_env_api_key, has_stored_api_key, allow_persistent_api_key,
+         connected, data_dir]
+
+    ScopeSummary:
+      type: object
+      additionalProperties:
+        type: array
+        items: { type: string }
+
+    ConversationScopes:
+      type: object
+      description: >-
+        Listenfelder akzeptieren auch einen String; er wird an Leerzeichen, Komma und
+        Semikolon aufgetrennt (backend/app/models.py:67-83).
+      properties:
+        deployment_ids:
+          type: array
+          items: { type: string }
+        external_application_ids:
+          type: array
+          items: { type: string }
+        conversation_types:
+          type: array
+          items: { type: string }
+
+    ChatItem:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [ai_chat, deployment_conversation] }
+        deployment_id: { type: [string, 'null'] }
+        title: { type: [string, 'null'] }
+        created_at: { type: [string, 'null'] }
+        updated_at: { type: [string, 'null'] }
+        last_event_created_at: { type: [string, 'null'] }
+        message_count: { type: [integer, 'null'] }
+        raw_preview:
+          type: [object, 'null']
+          description: Flache Vorschau, max. 24 Schluessel, Strings auf 300 Zeichen gekuerzt
+        exportable:
+          type: boolean
+          default: true
+          description: false, wenn keine ID gefunden wurde und eine Ersatz-ID gebildet werden musste
+        selected: { type: boolean, default: false }
+      required: [id, type]
+
+    ChatListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ChatItem' }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+        warnings:
+          type: array
+          items: { type: string }
+      required: [items, counts]
+
+    ExportRequest:
+      type: object
+      properties:
+        mode: { type: string, enum: [selected, all] }
+        chat_ids:
+          type: array
+          items: { type: string }
+          description: Kanonische Schluessel "type:deployment_id_or_empty:id"
+        types:
+          type: array
+          items: { type: string, enum: [ai_chat, deployment_conversation] }
+          default: [ai_chat, deployment_conversation]
+        formats:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [json, html, markdown, openwebui] }
+          default: [json, markdown, html]
+        deployment_ids:
+          type: array
+          items: { type: string }
+        external_application_ids:
+          type: array
+          items: { type: string }
+        conversation_types:
+          type: array
+          items: { type: string }
+        zip: { type: boolean, default: true }
+      required: [mode]
+
+    ExportStartResponse:
+      type: object
+      properties:
+        job_id: { type: string, format: uuid }
+      required: [job_id]
+
+    JobProgress:
+      type: object
+      properties:
+        total: { type: integer, default: 0 }
+        done: { type: integer, default: 0 }
+        failed: { type: integer, default: 0 }
+        percent: { type: integer, minimum: 0, maximum: 100, default: 0 }
+
+    TimedOutItem:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [ai_chat, deployment_conversation] }
+        title: { type: [string, 'null'] }
+        deployment_id: { type: [string, 'null'] }
+        step: { type: string, enum: [detail, html_export] }
+
+    BackupJob:
+      type: object
+      properties:
+        job_id: { type: string }
+        status:
+          type: string
+          enum: [queued, running, completed, failed, cancelled]
+        progress: { $ref: '#/components/schemas/JobProgress' }
+        current_item:
+          type: [string, 'null']
+          description: 'Format "type:id" waehrend der Verarbeitung'
+        errors:
+          type: array
+          items: { type: string }
+        result:
+          type: [object, 'null']
+          properties:
+            backup_id: { type: string }
+            backup_path: { type: string }
+            zip_path: { type: [string, 'null'] }
+            download_url: { type: string }
+            timed_out_items:
+              type: array
+              items: { $ref: '#/components/schemas/TimedOutItem' }
+      required: [job_id, status, progress]
+
+    BackupSummary:
+      type: object
+      properties:
+        backup_id: { type: string }
+        created_at: { type: string }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+        path: { type: string }
+        zip_available: { type: boolean, default: false }
+        download_url: { type: [string, 'null'] }
+        size_bytes: { type: [integer, 'null'] }
+      required: [backup_id, created_at, path]
+
+    BackupListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/BackupSummary' }
+      required: [items]
+
+    BackupManifest:
+      type: object
+      description: >-
+        Inhalt von manifest.json. Gegenueber dem Pydantic-Modell BackupManifest
+        schreibt die Engine zusaetzlich timed_out_items, index_html und bei
+        Open-WebUI-Export openwebui_import (backend/app/backup_engine.py:196-211).
+      properties:
+        backup_id: { type: string }
+        created_at: { type: string }
+        app: { type: string }
+        app_version: { type: [string, 'null'] }
+        request: { $ref: '#/components/schemas/ExportRequest' }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              type: { type: string }
+              deployment_id: { type: [string, 'null'] }
+              title: { type: [string, 'null'] }
+              files:
+                type: array
+                items: { type: string }
+              export_stats:
+                type: object
+                properties:
+                  extracted_messages: { type: integer }
+                  history_items: { type: [integer, 'null'] }
+                  total_events: { type: [integer, 'null'] }
+                  complete_by_total_events: { type: [boolean, 'null'] }
+                  fetch: { type: [object, 'null'] }
+              errors:
+                type: array
+                items: { type: string }
+        errors:
+          type: array
+          items: { type: string }
+        timed_out_items:
+          type: array
+          items: { $ref: '#/components/schemas/TimedOutItem' }
+        index_html: { type: string, const: index.html }
+        openwebui_import: { type: string }
+      required: [backup_id, created_at]
