@@ -50,7 +50,8 @@ Vorhanden: `README.md` (englisch), `CHANGELOG.md`, `SECURITY.md`, `LICENSE`
 
 Drift: `docs/12-offene-punkte.md` führt Schuld 1 („Härtungen nicht
 eingecheckt"), Schuld 2 (Fail-open bei halber Auth-Konfiguration) und Schuld 25
-(`frontend/dist/` eingecheckt) noch als offen — alle drei sind erledigt. Ebenso
+(`frontend/dist/` eingecheckt) noch als offen — alle drei sind erledigt
+(**Drift behoben 2026-09-29:** `docs/01`–`12` und `docs/README.md` nachgezogen). Ebenso
 sind N2 (`/docs` aktiv), M3 (root-Container) und N3 (keine Security-Header) aus
 `todo2026.md` erledigt.
 

@@ -51,7 +51,7 @@ Belege in Reihenfolge: `backend/app/main.py:168-187, 190-211, 214-234, 237-240, 
 | Aktivierung | Nur wenn **beide** Variablen gesetzt sind; sonst ist die gesamte API offen | `backend/app/config.py:29-31` |
 | Halbe Konfiguration | Startet **nicht** — `RuntimeError` im Startup-Hook mit Nennung der fehlenden Variablen | `backend/app/main.py:115-125` |
 | Ausnahmen | Genau ein Pfad: `/api/health`, als `frozenset` mit Begründung (HomeLAB_UX-Polling, Container-Healthcheck) | `backend/app/main.py:66-68` |
-| Vergleich | `hmac.compare_digest` für Benutzername und Passwort | `backend/app/security.py:111` |
+| Vergleich | `hmac.compare_digest` für Benutzername und Passwort auf UTF-8-Bytes — Zugangsdaten mit Umlauten ergeben seit 2026-09-29 `401` statt `500` | `backend/app/security.py:111-114` |
 | Antwort bei Fehlschlag | `401` mit `WWW-Authenticate: Basic` und dem Text „Authentication required" | `backend/app/main.py:95-99` |
 | Granularität | Keine — es gibt keine Rollen und keine endpunktweise Prüfung; wer authentifiziert ist, darf alles | keine weitere Prüfung in den Handlern |
 

@@ -72,13 +72,13 @@ Belege: `frontend/package.json:7-9`, `backend/app/config.py:59,68`, `backend/app
 
 | Artefakt | Erzeugt durch | Inhalt | Beleg |
 |---|---|---|---|
-| `frontend/dist/` | `npm run build` = `tsc -b && vite build` | `index.html` plus `assets/index-*.js` und `assets/index-*.css` mit Content-Hash im Namen. Der eingecheckte Vergleichsstand misst 199 624 Byte JS und 17 204 Byte CSS | `frontend/package.json:8`, `frontend/dist/` |
+| `frontend/dist/` | `npm run build` = `tsc -b && vite build` | `index.html` plus `assets/index-*.js` und `assets/index-*.css` mit Content-Hash im Namen (lokal erzeugt, nicht versioniert) | `frontend/package.json:8` |
 | Container-Image | `docker compose build` bzw. `docker build .` | Zwei Stages: Node-Build, dann Python-Runtime mit kopiertem Bundle | `Dockerfile:1-35` |
 | Backup-ZIPs | Zur Laufzeit je Sicherung | Nutzdaten, kein Build-Artefakt | `backend/app/exporters.py:720-728` |
 
 **Der Typecheck ist Teil des Builds.** `tsc -b` läuft mit `strict: true` vor `vite build`; ein Typfehler bricht den Image-Build ab (`frontend/tsconfig.json:10`, `frontend/package.json:8`).
 
-**`frontend/dist/` ist eingecheckt, wird aber nicht ausgeliefert.** Die `.dockerignore` schließt das Verzeichnis aus (`.dockerignore:6`), damit im Image garantiert der frisch gebaute Stand landet. Zugleich steht `dist/` in der `.gitignore` (`.gitignore:4`) — das Verzeichnis ist also von einer früheren Ergänzung erhalten geblieben. Praktische Folge: Der eingecheckte Stand vom 2026-05-16 kann vom Quellcode abweichen und sollte nicht als Referenz für das Verhalten der Oberfläche dienen.
+**`frontend/dist/` wird nicht versioniert und nicht ausgeliefert.** `dist/` steht in der `.gitignore` (`.gitignore:4`) und ist nicht mehr im Repository (Stand 2026-09-29, `git ls-files frontend/dist` leer); die `.dockerignore` schließt das Verzeichnis zusätzlich aus (`.dockerignore:6`), damit im Image garantiert der frisch gebaute Stand landet.
 
 ## CI/CD
 
@@ -149,28 +149,25 @@ curl -fsS http://127.0.0.1:8080/api/health
 | Frontend-Version | `1.0.0` in `frontend/package.json:3` — **manuell** mit der Backend-Version synchron zu halten; es gibt keinen Mechanismus dafür | `frontend/package.json:3` |
 | Changelog | `CHANGELOG.md` im Keep-a-Changelog-Format mit `[Unreleased]`-Abschnitt und `[1.0.0] — 2026-05-08` | `CHANGELOG.md:1-40` |
 | SemVer | Als Konvention erkennbar (`SECURITY.md:5` verspricht Fixes für „die aktuelle Minor-Version der 1.x-Linie"), aber nirgends automatisiert | `SECURITY.md:5` |
-| Git-Tags | ⚠️ siehe Marker |
+| Git-Tags | **keine** — `git tag -l` liefert am 2026-09-29 nichts, obwohl `CHANGELOG.md` ein `[1.0.0] — 2026-05-08` führt | `git tag -l` |
 | Release-Artefakt | Keines. Es gibt keinen Release-Prozess, der ein Image oder Archiv erzeugt | — |
 
-Der `[Unreleased]`-Abschnitt des Changelogs enthält bereits sechs Einträge (Timeout-Behandlung, Retry-Schaltfläche, Export-Reihenfolge, Dokumentation) — die Version im Code steht dennoch unverändert auf `1.0.0`. Wer aus `/api/health` auf den Funktionsstand schließt, liegt daneben.
+Der `[Unreleased]`-Abschnitt des Changelogs enthält bereits zahlreiche Einträge (Timeout-Behandlung, Retry-Schaltfläche, Export-Reihenfolge, Dokumentation, die Fehlerbehebungen aus dem QA-Audit 2026-09-29) — die Version im Code steht dennoch unverändert auf `1.0.0`. Wer aus `/api/health` auf den Funktionsstand schließt, liegt daneben.
 
-> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Ob und welche Git-Tags für Releases vergeben wurden. Der Arbeitsstand dieser Dokumentation wertet nur den Dateibestand und die Commit-Historie des Arbeitsverzeichnisses aus; eine Tag-Konvention ist in keiner Datei des Repositories beschrieben.
+## Build- und Testergebnis (QA-Audit 2026-09-29)
 
-## Stand des Arbeitsverzeichnisses
+Die im Juli nur im Arbeitsverzeichnis liegenden Härtungen (`USER app`, Loopback-Bindung, `no-new-privileges`, Security-Header, `_check_auth_config()`, abgeschaltete `/docs`) sind inzwischen **committet**; der Arbeitsbaum war zum Audit sauber (`PROJEKTSTAND.md`, Abschnitt „Aktivität").
 
-Diese Dokumentation beschreibt das **Arbeitsverzeichnis**, nicht den letzten Commit. Zum Zeitpunkt der Erstellung (2026-07-30) sind folgende Dateien geändert und **nicht committet**:
+| Prüfung | Ergebnis 2026-09-29 | Beleg |
+|---|---|---|
+| Testsuite | **nicht vorhanden** — kein Testverzeichnis, keine CI | `PROJEKTSTAND.md`, Abschnitt „Build/Test" |
+| `python -m compileall backend/app` | grün | ebd. |
+| Smoke-Skript (venv mit FastAPI) gegen die im Audit geänderten Funktionen: Diamant und Zyklus im Export, Basic-Auth mit Umlauten, Timeout/Fehler/Erfolg in `_call_with_timeout` | grün | ebd. |
+| Frontend-Build | **nicht verifiziert** — im Audit nicht ausgeführt | ebd. |
+| Image-Build | **nicht verifiziert** | — |
 
-| Datei | Änderung |
-|---|---|
-| `Dockerfile` | `adduser --system --group app`, `chown -R app:app`, `USER app` ergänzt |
-| `compose.yaml` | Portmapping auf `127.0.0.1:8080:8080` geändert, `security_opt: no-new-privileges:true` ergänzt |
-| `backend/app/main.py` | Security-Header-Middleware, `_check_auth_config()`, `docs_url=None/redoc_url=None/openapi_url=None`, Logger |
-| `.env.example` | Warnhinweis zur Basic-Auth; zusätzlich der beim Erstellen dieser Dokumentation ergänzte Abschnitt mit den fünf fehlenden Variablen |
-| `todo2026.md` | Review-Stand aktualisiert |
-| `MONETARISIERUNGSBEWERTUNG.md` | neu, nicht getrackt |
-
-**Konsequenz:** Wer den Commit `73f2b41` deployt, bekommt einen **root-Container ohne Security-Header, mit offener API-Dokumentation und LAN-weitem Portmapping**. Der erste Schritt vor jedem weiteren Vorhaben sollte das Einchecken dieser Änderungen sein.
+Im Audit behoben (Code-Commit `cf227a3`): Executor-Leck in `_call_with_timeout` (`backend/app/backup_engine.py:14-28`), Fehlerzählung bei fehlgeschlagenem Detail-Abruf (`backend/app/backup_engine.py:93-97,177-178`), UTF-8-Bytevergleich in `basic_auth_matches` (`backend/app/security.py:111-114`) und pfadbezogenes `seen` im Export (`backend/app/exporters.py:57-66`).
 
 ## Marker in diesem Dokument
 
-- ⚠️ NICHT ERMITTELBAR — Existenz und Konvention von Git-Release-Tags
+Keine. Der frühere Marker zu Git-Release-Tags ist seit 2026-09-29 geschlossen (es gibt keine Tags).

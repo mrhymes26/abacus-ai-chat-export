@@ -99,7 +99,7 @@ flowchart TB
 | `backend/requirements.txt` | Vier direkte Abhängigkeiten als Versionsbereiche; **kein Lockfile** |
 | `frontend/src/` | React-Quellcode: `App.tsx`, `api.ts`, `types.ts`, `main.tsx`, `index.css` |
 | `frontend/src/components/` | Neun Präsentationskomponenten, jede genau ein Panel der Oberfläche |
-| `frontend/dist/` | Eingecheckter Build-Stand des Bundles (`index.html` plus zwei Assets); im Image wird er neu gebaut, nicht kopiert (`.dockerignore:6`) |
+| `frontend/dist/` | Lokales Build-Ergebnis des Bundles, **nicht versioniert** (`.gitignore:4`, Stand 2026-09-29); im Image wird es neu gebaut, nicht kopiert (`.dockerignore:6`) |
 | `frontend/node_modules/` | Lokal installierte Abhängigkeiten; nicht Teil des Images (`.dockerignore:4-5`) |
 | `docs/` | Diese Dokumentation und der Oberflächen-Screenshot `preview-ui.png` |
 | `scripts/` | **Leer.** Keine Datei enthalten |

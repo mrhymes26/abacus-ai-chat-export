@@ -57,13 +57,13 @@ Begründung aus dem Code:
 | CI/CD | **Keine.** Weder `.github/workflows/` noch `.gitea/workflows/` existieren | Verzeichnisse fehlen |
 | Fehlerbehandlung | **Überdurchschnittlich für die Job-Ebene:** je Item eigene Fehlerliste, Timeout-Schutz je SDK-Aufruf, Fortsetzen nach Einzelfehlern, unterbrochene Jobs werden beim Start als `failed` markiert | `backend/app/backup_engine.py:93-108,174-189`, `backend/app/database.py:70-87` |
 | Logging | **Nur rudimentär.** Es gibt einen Logger, der aber ausschließlich den Auth-Status beim Start meldet; alle übrigen Vorgänge hinterlassen serverseitig keine Spur, zwei Pfade verschlucken Ausnahmen vollständig | `backend/app/main.py:55,127-132`; `except Exception: pass` in `main.py:223-224`, `except Exception: return` in `main.py:372-373` |
-| Authentifizierung | **Vorhanden, aber standardmäßig aus.** Sind beide Basic-Auth-Variablen leer, ist die gesamte API offen; halb konfigurierte Auth bricht seit der jüngsten (noch nicht eingecheckten) Änderung beim Start ab | `backend/app/config.py:29-31`, `backend/app/main.py:87-100,115-132` |
+| Authentifizierung | **Vorhanden, aber standardmäßig aus.** Sind beide Basic-Auth-Variablen leer, ist die gesamte API offen (der Port ist deshalb nur an Loopback gebunden); halb konfigurierte Auth bricht beim Start ab | `backend/app/config.py:29-31`, `backend/app/main.py:87-100,115-138` |
 | Migrationen | **Keine Schemaversionierung.** `init()` nutzt ausschließlich `CREATE TABLE IF NOT EXISTS`; nachträglich hinzugefügte Spalten würden auf bestehenden Datenbanken fehlen | `backend/app/database.py:17-58` |
 | Reproduzierbare Abhängigkeiten | **Nur zur Hälfte.** Das Frontend hat ein vollständiges `package-lock.json`; das Backend hat **kein** Lockfile, nur Versionsbereiche | `frontend/package-lock.json` vorhanden, `backend/requirements.txt:1-4` |
-| Betriebsreife | Healthcheck im Image und in Compose, unprivilegierter Benutzer, `no-new-privileges`, Security-Header, Loopback-Bindung — alles vorhanden, aber **im Arbeitsverzeichnis und nicht committet** | `Dockerfile:25-33`, `compose.yaml:9-11`, `backend/app/main.py:105-112`; `git status` zeigt diese Dateien als geändert |
+| Betriebsreife | Healthcheck im Image und in Compose, unprivilegierter Benutzer, `no-new-privileges`, Security-Header, Loopback-Bindung — alles vorhanden und committet (Stand 2026-09-29) | `Dockerfile:25-33`, `compose.yaml:9-11`, `backend/app/main.py:105-112` |
 | Dokumentation | `README.md`, `CHANGELOG.md`, `SECURITY.md`, `LICENSE`, `RELEASE_README.md` und ein detailliertes Review (`todo2026.md`) sind vorhanden | Dateien im Projektwurzelverzeichnis |
 
-Kurz: Die Fachlogik ist für ein Werkzeug dieser Größe ungewöhnlich sorgfältig — insbesondere die durchgängige Schwärzung von Geheimnissen und die Selbstkontrolle auf Backup-Vollständigkeit. Was fehlt, ist die Absicherung drumherum: Tests, CI, Logging und ein eingecheckter Härtungsstand.
+Kurz: Die Fachlogik ist für ein Werkzeug dieser Größe ungewöhnlich sorgfältig — insbesondere die durchgängige Schwärzung von Geheimnissen und die Selbstkontrolle auf Backup-Vollständigkeit. Was fehlt, ist die Absicherung drumherum: Tests, CI, Logging sowie eine Paginierung, die nicht still nach der ersten Seite abbrechen kann (Stand QA-Audit 2026-09-29, `PROJEKTSTAND.md`).
 
 ## Marker in diesem Dokument
 

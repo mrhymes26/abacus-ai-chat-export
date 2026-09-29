@@ -168,7 +168,7 @@ sequenceDiagram
         EN->>FS: "SDK-Export bzw. meta.json"
       end
     end
-    EN->>EN: "keine Datei geschrieben? failed erhoehen"
+    EN->>EN: "keine Datei oder Detail fehlgeschlagen? failed erhoehen"
     EN->>DB: "done, failed, errors_json aktualisieren"
   end
 
@@ -188,7 +188,7 @@ sequenceDiagram
 
 **Fehler- und Wiederholungsverhalten.** Es gibt **keinen** Retry. Jeder Fehler ist itembezogen: Fehlertext in die Item-Liste, Lauf geht weiter. Ein Timeout beendet nur den betroffenen Aufruf. Wiederholung ist eine **Nutzeraktion** — die Oberfläche bietet nach dem Lauf die Schaltfläche „Retry timed-out items", die einen neuen Job mit genau diesen Items startet (`frontend/src/App.tsx:161-177`).
 
-**Fehlerzählung mit blindem Fleck.** `failed` wird nur erhöht, wenn für ein Item **keine einzige** Datei geschrieben wurde (`backend/app/backup_engine.py:174-175`). Läuft der Detailabruf in einen Timeout, bleibt `detail` auf der Vorschau stehen, und der JSON-Zweig schreibt daraus trotzdem eine Datei — das Item gilt als erfolgreich, obwohl der Gesprächsverlauf nie geladen wurde. Sichtbar bleibt der Verlust nur über `timed_out_items` und die Fehlerliste, nicht über den Zähler.
+**Fehlerzählung.** `failed` wird erhöht, wenn für ein Item keine Datei geschrieben wurde **oder** der Detailabruf scheiterte bzw. in den Timeout lief (`backend/app/backup_engine.py:93-97,177-178`, Flag `detail_ok`). Bis zum QA-Audit am 2026-09-29 zählte ein Item mit bloßer Stub-JSON aus der Vorschau als Erfolg; dieser blinde Fleck ist behoben.
 
 **Abbruch mitten im Lauf.** Das Abbruchflag wird **zwischen** zwei Items geprüft (`backend/app/backup_engine.py:85-86`); das laufende Item wird zu Ende verarbeitet. Nach dem Verlassen der Schleife läuft der reguläre Abschluss vollständig durch: Manifest, Fehlerprotokoll, Übersichtsseite, ZIP und Datenbankeintrag entstehen auch bei `cancelled` (`backend/app/backup_engine.py:191-234`). **Ein abgebrochener Lauf hinterlässt also eine gültige, aber unvollständige Sicherung.**
 
@@ -284,8 +284,8 @@ stateDiagram-v2
 | Worker | Ein Thread je Job über `asyncio.to_thread` (`backend/app/jobs.py:37`) | Der Standard-Threadpool von `asyncio` begrenzt die Zahl paralleler Läufe indirekt |
 | Geteilter Zustand | Alle Läufe nutzen **denselben** `AbacusService` und damit denselben SDK-Client (`backend/app/main.py:52`, `backend/app/jobs.py:19`) | `last_warnings` und `_discovered_conversation_scopes` werden von parallelen Läufen gegenseitig überschrieben |
 | Locking | Ein `RLock` je `Database`-Instanz — API und Worker halten **verschiedene** Instanzen (`backend/app/backup_engine.py:60`) | Die eigentliche Serialisierung übernimmt SQLite selbst mit `timeout=30` |
-| Timeout je SDK-Aufruf | Eigener `ThreadPoolExecutor` mit 120 s, bei Zeitüberschreitung `shutdown(wait=False)` (`backend/app/backup_engine.py:14-29`) | Hängende Aufrufe blockieren den Lauf nicht |
-| Executor-Aufräumen | Der `else`-Zweig mit `shutdown(wait=True)` ist **unerreichbar**, weil `return` im `try`-Block ihn überspringt | Je Item entstehen bis zu zwei Executors, die erst die Garbage Collection einsammelt |
+| Timeout je SDK-Aufruf | Eigener `ThreadPoolExecutor` mit 120 s (`backend/app/backup_engine.py:14-28`) | Hängende Aufrufe blockieren den Lauf nicht |
+| Executor-Aufräumen | Seit 2026-09-29 im `finally`: `shutdown(wait=False, cancel_futures=True)` bei Erfolg, Timeout und SDK-Fehler (`backend/app/backup_engine.py:25-28`) | Kein Executor-Leck mehr; ein hängender Worker-Thread blockiert den Job nicht |
 | Abbruchsignal | `threading.Event` je Job, zwischen den Items geprüft | Feinere Granularität als das Item gibt es nicht |
 
 ## Transaktions- und Konsistenzgrenzen

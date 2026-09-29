@@ -16,8 +16,8 @@ Abacus.AI bietet keinen Weg, eigene Chatverläufe über die Weboberfläche zu ex
 | [08-konfiguration.md](08-konfiguration.md) | Alle 15 Umgebungsvariablen mit Fundstelle, Vorrangreihenfolge, Feature-Flags, Umgebungsunterschiede |
 | [09-build-deploy.md](09-build-deploy.md) | Setup als kopierbare Befehlsfolge, Buildartefakte, fehlende CI, Deployment, Rollback, Versionierung |
 | [10-betrieb.md](10-betrieb.md) | Logging, Health, Volume-Sicherung mit konkretem Restore, 13 Störungsbilder, Wartung, Skalierungsgrenzen |
-| [11-sicherheit-compliance.md](11-sicherheit-compliance.md) | Auth, Umgang mit dem API-Schlüssel, personenbezogene Daten, 16 priorisierte Befunde, Lizenz-Fazit |
-| [12-offene-punkte.md](12-offene-punkte.md) | Alle Marker, Annahmen, 25 technische Schulden mit Aufwand und Risiko, priorisierte nächste Schritte |
+| [11-sicherheit-compliance.md](11-sicherheit-compliance.md) | Auth, Umgang mit dem API-Schlüssel, personenbezogene Daten, 16 priorisierte Befunde (davon 4 behoben), Lizenz-Fazit |
+| [12-offene-punkte.md](12-offene-punkte.md) | Alle Marker, Annahmen, 25 technische Schulden (Stand 2026-09-29: 6 erledigt) mit Aufwand und Risiko, nächste Schritte nach P1–P3 |
 
 Maschinenlesbare Schnittstellenbeschreibung: [openapi.yaml](openapi.yaml) (OpenAPI 3.1, aus dem Code erzeugt — im Projekt existierte keine Spezifikation).
 
@@ -37,16 +37,16 @@ Variante ohne Docker und Details: [09-build-deploy.md](09-build-deploy.md#lokale
 
 | Feld | Wert |
 |---|---|
-| Datum | 2026-07-30 |
-| Git-Commit | `73f2b4103d11f6f18831959a3f97051f549d38e6` (`73f2b41`, 2026-07-22, „docs: RELEASE_README.md ergaenzt") |
+| Datum | 2026-07-30, fortgeschrieben 2026-09-29 (QA-Audit) |
+| Git-Commit | Erhebung auf `73f2b41` (2026-07-22); Fortschreibung auf `cf227a3` (2026-09-29, „fix: QA-Audit 2026-09-29 – Fehlerbehebungen und aktualisierter Projektstand") |
 | Branch | `main` |
-| Arbeitsverzeichnis | **nicht sauber** — die Dokumentation beschreibt den Stand des Arbeitsverzeichnisses, nicht den des Commits. Geändert: `Dockerfile`, `compose.yaml`, `backend/app/main.py`, `.env.example`, `todo2026.md`; neu: `MONETARISIERUNGSBEWERTUNG.md`. Die Änderungen enthalten **sämtliche Sicherheitshärtungen** (unprivilegierter Benutzer, Loopback-Bindung, Security-Header, abgeschaltete `/docs`) |
+| Arbeitsverzeichnis | sauber zum QA-Audit am 2026-09-29 — die im Juli nur lokal vorhandenen Sicherheitshärtungen (unprivilegierter Benutzer, Loopback-Bindung, Security-Header, abgeschaltete `/docs`) sind committet |
 | Projektversion | `1.0.0` (`backend/app/models.py:9`, `frontend/package.json:3`) |
-| Tests | **Keine vorhanden.** Verifiziert wurden am 2026-07-30 stattdessen: AST-Parse aller zwölf Backend-Module (fehlerfrei) und `docker compose config -q` (gültig). Ein Image-Build unterblieb, weil er Netzwerkzugriff erfordert |
+| Tests | **Keine vorhanden.** Am 2026-09-29 verifiziert: `python -m compileall backend/app` grün, Smoke-Skript gegen die im Audit geänderten Funktionen grün; Frontend- und Image-Build nicht ausgeführt ([09](09-build-deploy.md#build--und-testergebnis-qa-audit-2026-09-29)) |
 | Lizenz-Ampel | 🔴 — MIT-Lizenz im Widerspruch zur Zielvorgabe „proprietär", dazu nicht ermittelbare Backend-Lizenzen. Details in [11-sicherheit-compliance.md](11-sicherheit-compliance.md#lizenz-compliance-fazit) |
 
 ## Die drei wichtigsten Erkenntnisse
 
-1. **Die Sicherheitshärtungen sind nicht eingecheckt.** Wer `73f2b41` deployt, bekommt einen root-Container mit offener API-Dokumentation, ohne Security-Header und mit LAN-weitem Portmapping — hinter dem vollständige Chatverläufe und der API-Schlüssel liegen.
-2. **Drei Codepfade lassen ein Backup lautlos unvollständig werden:** die nach Seite 1 abbrechende Paginierung, der als Erfolg gezählte Timeout-Stub und die doppelt gezählten organisationsweiten Konversationen. Bei einem Backup-Werkzeug ist der stille Teilexport die gefährlichste Fehlerklasse.
+1. **Die Sicherheitshärtungen sind inzwischen eingecheckt** (Stand 2026-09-29) — die Auth bleibt aber ohne beide Basic-Auth-Variablen aus; den Schutz liefert dann allein die Loopback-Bindung.
+2. **Ein Backup kann weiterhin lautlos unvollständig werden:** die nach Seite 1 abbrechende Paginierung (P1) und die doppelt exportierten organisationsweiten Konversationen sind offen; der als Erfolg gezählte Timeout-Stub ist seit dem QA-Audit 2026-09-29 behoben. Bei einem Backup-Werkzeug ist der stille Teilexport die gefährlichste Fehlerklasse.
 3. **Der Umgang mit dem API-Schlüssel ist vorbildlich, die Ablage der Nutzdaten nicht.** Der Schlüssel wird zentral registriert und rekursiv aus jeder Datei und jeder Fehlermeldung geschwärzt — die gesicherten Chatverläufe selbst liegen unverschlüsselt und unbefristet im Volume, ohne Aufbewahrungsregel und ohne Möglichkeit, eine einzelne Konversation zu löschen.

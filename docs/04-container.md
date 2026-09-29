@@ -6,7 +6,7 @@ Image-Aufbau, Laufzeitparameter, Ports, Volumes, Start- und Stoppverhalten sowie
 
 > **Quelle aller Angaben in diesem Dokument: `Dockerfile` und `compose.yaml`, nicht ein gebautes Image.** Auf dem Host existiert kein Abbild dieses Projekts (`docker images` liefert keinen Treffer), und ein Build würde `npm ci` und `pip install` und damit Netzwerkzugriff erfordern, was für diese Dokumentation ausgeschlossen ist. Überall dort, wo die Spezifikation Angaben aus dem Image verlangt (Digest, Systempakete, UID/GID, Layer-Größen), steht ein Marker.
 
-> **Stand-Hinweis:** Die Härtungen `USER app`, die Loopback-Bindung des Ports und `no-new-privileges` liegen als **nicht committete Änderungen** im Arbeitsverzeichnis (`git status`: `M Dockerfile`, `M compose.yaml`). Der zuletzt eingecheckte Stand `73f2b41` baut einen **root-Container** und veröffentlicht `"8080:8080"` auf allen Schnittstellen. Alle Angaben unten beziehen sich auf das Arbeitsverzeichnis.
+> **Stand-Hinweis (aktualisiert 2026-09-29):** Die Härtungen `USER app`, die Loopback-Bindung des Ports und `no-new-privileges` sind inzwischen **committet**; der Arbeitsbaum war zum QA-Audit am 2026-09-29 sauber.
 
 ## Basis-Images
 
@@ -109,7 +109,7 @@ Belegbar ist, **welche** Schichten die Größe bestimmen — die drei größten 
 
 1. Das Basis-Image `python:3.11-slim` selbst (`Dockerfile:9`).
 2. `RUN pip install --no-cache-dir -r requirements.txt` (`Dockerfile:17`) — vier Pakete samt transitivem Baum, darunter `abacusai`; mit Abstand die größte selbst erzeugte Schicht.
-3. `COPY --from=frontend-build /app/frontend/dist /app/static` (`Dockerfile:20`) — der eingecheckte Vergleichsbuild misst 199 624 Byte JavaScript und 17 204 Byte CSS (`frontend/dist/assets/`), also rund 220 KB. Verglichen mit Schicht 2 vernachlässigbar, aber die drittgrößte selbst erzeugte.
+3. `COPY --from=frontend-build /app/frontend/dist /app/static` (`Dockerfile:20`) — ein lokaler Vergleichsbuild vom 2026-05-16 maß 199 624 Byte JavaScript und 17 204 Byte CSS, also rund 220 KB (`frontend/dist/` ist seitdem nicht mehr versioniert). Verglichen mit Schicht 2 vernachlässigbar, aber die drittgrößte selbst erzeugte.
 
 Der Anwendungscode (`Dockerfile:19`) umfasst rund 3 000 Zeilen Python und liegt im niedrigen dreistelligen Kilobyte-Bereich. `--no-cache-dir` beim `pip install` und die `.dockerignore` (schließt `.git`, `.env`, `node_modules`, `dist`, `__pycache__`, `data`, `backups` aus — `.dockerignore:1-12`) verhindern die üblichen Größentreiber.
 

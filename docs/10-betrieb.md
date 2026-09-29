@@ -150,7 +150,7 @@ Es gibt **keinen** Reimport-Mechanismus: Kein Codepfad liest bestehende Verzeich
 | **Geteilter SDK-Client** | Alle Jobs nutzen denselben `AbacusService`; `last_warnings` und die entdeckten Scopes werden von parallelen Läufen überschrieben | `backend/app/main.py:52`, `backend/app/jobs.py:19` |
 | **Keine Begrenzung paralleler Jobs** | Jeder `POST /api/export` startet sofort einen weiteren Lauf; es gibt keine Warteschlange und kein Limit | `backend/app/jobs.py:26-33` |
 | **Sequenzieller Durchsatz** | Innerhalb eines Laufs wird streng ein Item nach dem anderen verarbeitet. Bei 1 000 Konversationen und je 2 Sekunden Antwortzeit dauert ein Lauf über eine halbe Stunde; ein einziger Timeout kostet zusätzlich 120 Sekunden | `backend/app/backup_engine.py:84-189` |
-| **Executor-Leck** | Je Item entstehen bis zu zwei `ThreadPoolExecutor`, die auf dem Erfolgspfad nie heruntergefahren werden | `backend/app/backup_engine.py:14-29` |
+| **Hängende Worker-Threads** | Seit 2026-09-29 wird jeder Executor im `finally` heruntergefahren; ein in den Timeout gelaufener SDK-Aufruf lebt aber als Thread weiter, bis das SDK zurückkehrt | `backend/app/backup_engine.py:14-28` |
 | **`GET /api/backups` wird langsam** | `size_bytes` wird bei jedem Aufruf durch rekursives Durchlaufen jedes Backup-Verzeichnisses berechnet | `backend/app/utils.py:93-104`, `backend/app/database.py:179` |
 | **Kein Rate-Limit** | Weder für Basic-Auth-Versuche noch für `POST /api/connect`; ohne vorgelagerten Proxy ist beides unbegrenzt versuchbar | keine Limiter-Middleware in `main.py` |
 | **Keine Ressourcengrenzen** | Compose setzt weder CPU- noch Speichergrenze | `compose.yaml` ohne `deploy`/`mem_limit` |

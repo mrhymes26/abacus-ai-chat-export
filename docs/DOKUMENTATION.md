@@ -7,9 +7,9 @@
 | Projekt | `app-abacus-chat-backup` |
 | Pfad | `app-abacus-chat-backup/` |
 | Version | NICHT ERMITTELBAR (Quelle: `kein Manifest mit Versionsfeld gefunden`) |
-| Git-Commit | `227a495` |
+| Git-Commit | `cf227a3` |
 | Branch | `main` |
-| Generiert am | 2026-07-30 |
+| Generiert am | 2026-09-29 |
 | Teildokumente | 12 von 12 |
 
 
@@ -98,7 +98,7 @@
   - [Zielumgebungen und Deployment-Verfahren](#zielumgebungen-und-deployment-verfahren)
   - [Rollback](#rollback)
   - [Versionierung und Release-Konvention](#versionierung-und-release-konvention)
-  - [Stand des Arbeitsverzeichnisses](#stand-des-arbeitsverzeichnisses)
+  - [Build- und Testergebnis (QA-Audit 2026-09-29)](#build--und-testergebnis-qa-audit-2026-09-29)
   - [Marker in diesem Dokument](#marker-in-diesem-dokument-8)
 - [10 — Betrieb · app-abacus-chat-backup](#10--betrieb--app-abacus-chat-backup)
   - [Logging](#logging)
@@ -185,13 +185,13 @@ Begründung aus dem Code:
 | CI/CD | **Keine.** Weder `.github/workflows/` noch `.gitea/workflows/` existieren | Verzeichnisse fehlen |
 | Fehlerbehandlung | **Überdurchschnittlich für die Job-Ebene:** je Item eigene Fehlerliste, Timeout-Schutz je SDK-Aufruf, Fortsetzen nach Einzelfehlern, unterbrochene Jobs werden beim Start als `failed` markiert | `backend/app/backup_engine.py:93-108,174-189`, `backend/app/database.py:70-87` |
 | Logging | **Nur rudimentär.** Es gibt einen Logger, der aber ausschließlich den Auth-Status beim Start meldet; alle übrigen Vorgänge hinterlassen serverseitig keine Spur, zwei Pfade verschlucken Ausnahmen vollständig | `backend/app/main.py:55,127-132`; `except Exception: pass` in `main.py:223-224`, `except Exception: return` in `main.py:372-373` |
-| Authentifizierung | **Vorhanden, aber standardmäßig aus.** Sind beide Basic-Auth-Variablen leer, ist die gesamte API offen; halb konfigurierte Auth bricht seit der jüngsten (noch nicht eingecheckten) Änderung beim Start ab | `backend/app/config.py:29-31`, `backend/app/main.py:87-100,115-132` |
+| Authentifizierung | **Vorhanden, aber standardmäßig aus.** Sind beide Basic-Auth-Variablen leer, ist die gesamte API offen (der Port ist deshalb nur an Loopback gebunden); halb konfigurierte Auth bricht beim Start ab | `backend/app/config.py:29-31`, `backend/app/main.py:87-100,115-138` |
 | Migrationen | **Keine Schemaversionierung.** `init()` nutzt ausschließlich `CREATE TABLE IF NOT EXISTS`; nachträglich hinzugefügte Spalten würden auf bestehenden Datenbanken fehlen | `backend/app/database.py:17-58` |
 | Reproduzierbare Abhängigkeiten | **Nur zur Hälfte.** Das Frontend hat ein vollständiges `package-lock.json`; das Backend hat **kein** Lockfile, nur Versionsbereiche | `frontend/package-lock.json` vorhanden, `backend/requirements.txt:1-4` |
-| Betriebsreife | Healthcheck im Image und in Compose, unprivilegierter Benutzer, `no-new-privileges`, Security-Header, Loopback-Bindung — alles vorhanden, aber **im Arbeitsverzeichnis und nicht committet** | `Dockerfile:25-33`, `compose.yaml:9-11`, `backend/app/main.py:105-112`; `git status` zeigt diese Dateien als geändert |
+| Betriebsreife | Healthcheck im Image und in Compose, unprivilegierter Benutzer, `no-new-privileges`, Security-Header, Loopback-Bindung — alles vorhanden und committet (Stand 2026-09-29) | `Dockerfile:25-33`, `compose.yaml:9-11`, `backend/app/main.py:105-112` |
 | Dokumentation | `README.md`, `CHANGELOG.md`, `SECURITY.md`, `LICENSE`, `RELEASE_README.md` und ein detailliertes Review (`todo2026.md`) sind vorhanden | Dateien im Projektwurzelverzeichnis |
 
-Kurz: Die Fachlogik ist für ein Werkzeug dieser Größe ungewöhnlich sorgfältig — insbesondere die durchgängige Schwärzung von Geheimnissen und die Selbstkontrolle auf Backup-Vollständigkeit. Was fehlt, ist die Absicherung drumherum: Tests, CI, Logging und ein eingecheckter Härtungsstand.
+Kurz: Die Fachlogik ist für ein Werkzeug dieser Größe ungewöhnlich sorgfältig — insbesondere die durchgängige Schwärzung von Geheimnissen und die Selbstkontrolle auf Backup-Vollständigkeit. Was fehlt, ist die Absicherung drumherum: Tests, CI, Logging sowie eine Paginierung, die nicht still nach der ersten Seite abbrechen kann (Stand QA-Audit 2026-09-29, `PROJEKTSTAND.md`).
 
 ### Marker in diesem Dokument
 
@@ -300,7 +300,7 @@ flowchart TB
 | `backend/requirements.txt` | Vier direkte Abhängigkeiten als Versionsbereiche; **kein Lockfile** |
 | `frontend/src/` | React-Quellcode: `App.tsx`, `api.ts`, `types.ts`, `main.tsx`, `index.css` |
 | `frontend/src/components/` | Neun Präsentationskomponenten, jede genau ein Panel der Oberfläche |
-| `frontend/dist/` | Eingecheckter Build-Stand des Bundles (`index.html` plus zwei Assets); im Image wird er neu gebaut, nicht kopiert (`.dockerignore:6`) |
+| `frontend/dist/` | Lokales Build-Ergebnis des Bundles, **nicht versioniert** (`.gitignore:4`, Stand 2026-09-29); im Image wird es neu gebaut, nicht kopiert (`.dockerignore:6`) |
 | `frontend/node_modules/` | Lokal installierte Abhängigkeiten; nicht Teil des Images (`.dockerignore:4-5`) |
 | `docs/` | Diese Dokumentation und der Oberflächen-Screenshot `preview-ui.png` |
 | `scripts/` | **Leer.** Keine Datei enthalten |
@@ -493,7 +493,7 @@ Image-Aufbau, Laufzeitparameter, Ports, Volumes, Start- und Stoppverhalten sowie
 
 > **Quelle aller Angaben in diesem Dokument: `Dockerfile` und `compose.yaml`, nicht ein gebautes Image.** Auf dem Host existiert kein Abbild dieses Projekts (`docker images` liefert keinen Treffer), und ein Build würde `npm ci` und `pip install` und damit Netzwerkzugriff erfordern, was für diese Dokumentation ausgeschlossen ist. Überall dort, wo die Spezifikation Angaben aus dem Image verlangt (Digest, Systempakete, UID/GID, Layer-Größen), steht ein Marker.
 
-> **Stand-Hinweis:** Die Härtungen `USER app`, die Loopback-Bindung des Ports und `no-new-privileges` liegen als **nicht committete Änderungen** im Arbeitsverzeichnis (`git status`: `M Dockerfile`, `M compose.yaml`). Der zuletzt eingecheckte Stand `73f2b41` baut einen **root-Container** und veröffentlicht `"8080:8080"` auf allen Schnittstellen. Alle Angaben unten beziehen sich auf das Arbeitsverzeichnis.
+> **Stand-Hinweis (aktualisiert 2026-09-29):** Die Härtungen `USER app`, die Loopback-Bindung des Ports und `no-new-privileges` sind inzwischen **committet**; der Arbeitsbaum war zum QA-Audit am 2026-09-29 sauber.
 
 ### Basis-Images
 
@@ -596,7 +596,7 @@ Belegbar ist, **welche** Schichten die Größe bestimmen — die drei größten 
 
 1. Das Basis-Image `python:3.11-slim` selbst (`Dockerfile:9`).
 2. `RUN pip install --no-cache-dir -r requirements.txt` (`Dockerfile:17`) — vier Pakete samt transitivem Baum, darunter `abacusai`; mit Abstand die größte selbst erzeugte Schicht.
-3. `COPY --from=frontend-build /app/frontend/dist /app/static` (`Dockerfile:20`) — der eingecheckte Vergleichsbuild misst 199 624 Byte JavaScript und 17 204 Byte CSS (`frontend/dist/assets/`), also rund 220 KB. Verglichen mit Schicht 2 vernachlässigbar, aber die drittgrößte selbst erzeugte.
+3. `COPY --from=frontend-build /app/frontend/dist /app/static` (`Dockerfile:20`) — ein lokaler Vergleichsbuild vom 2026-05-16 maß 199 624 Byte JavaScript und 17 204 Byte CSS, also rund 220 KB (`frontend/dist/` ist seitdem nicht mehr versioniert). Verglichen mit Schicht 2 vernachlässigbar, aber die drittgrößte selbst erzeugte.
 
 Der Anwendungscode (`Dockerfile:19`) umfasst rund 3 000 Zeilen Python und liegt im niedrigen dreistelligen Kilobyte-Bereich. `--no-cache-dir` beim `pip install` und die `.dockerignore` (schließt `.git`, `.env`, `node_modules`, `dist`, `__pycache__`, `data`, `backups` aus — `.dockerignore:1-12`) verhindern die üblichen Größentreiber.
 
@@ -743,7 +743,7 @@ Belege in Reihenfolge: `backend/app/main.py:168-187, 190-211, 214-234, 237-240, 
 | Aktivierung | Nur wenn **beide** Variablen gesetzt sind; sonst ist die gesamte API offen | `backend/app/config.py:29-31` |
 | Halbe Konfiguration | Startet **nicht** — `RuntimeError` im Startup-Hook mit Nennung der fehlenden Variablen | `backend/app/main.py:115-125` |
 | Ausnahmen | Genau ein Pfad: `/api/health`, als `frozenset` mit Begründung (HomeLAB_UX-Polling, Container-Healthcheck) | `backend/app/main.py:66-68` |
-| Vergleich | `hmac.compare_digest` für Benutzername und Passwort | `backend/app/security.py:111` |
+| Vergleich | `hmac.compare_digest` für Benutzername und Passwort auf UTF-8-Bytes — Zugangsdaten mit Umlauten ergeben seit 2026-09-29 `401` statt `500` | `backend/app/security.py:111-114` |
 | Antwort bei Fehlschlag | `401` mit `WWW-Authenticate: Basic` und dem Text „Authentication required" | `backend/app/main.py:95-99` |
 | Granularität | Keine — es gibt keine Rollen und keine endpunktweise Prüfung; wer authentifiziert ist, darf alles | keine weitere Prüfung in den Handlern |
 
@@ -918,7 +918,7 @@ Zweck: Fortschritt und Ergebnis eines Backup-Laufs, überlebt einen Neustart.
 | `updated_at` | TEXT | NOT NULL | — | Bei **jedem** `update_job` neu gesetzt (`database.py:102`) |
 | `total` | INTEGER | NOT NULL DEFAULT 0 | — | Anzahl aufgelöster Items zu Beginn des Laufs |
 | `done` | INTEGER | NOT NULL DEFAULT 0 | — | Verarbeitete Items; Grundlage der Prozentanzeige |
-| `failed` | INTEGER | NOT NULL DEFAULT 0 | — | Items **ohne jede** geschriebene Datei. Ein Item, für das nur eine Stub-JSON aus der Vorschau entstand, zählt hier **nicht** als Fehler (`backup_engine.py:174-175`) |
+| `failed` | INTEGER | NOT NULL DEFAULT 0 | — | Items ohne geschriebene Datei **oder** mit fehlgeschlagenem/abgelaufenem Detail-Abruf — seit 2026-09-29 zählt auch ein Item, für das nur eine Stub-JSON aus der Vorschau entstand, als Fehler (`backup_engine.py:93-97,177-178`) |
 | `current_item` | TEXT | — | — | `"<type>:<id>"` während der Verarbeitung, sonst `NULL` |
 | `request_json` | TEXT | NOT NULL | — | Der vollständige `ExportRequest` als JSON |
 | `result_json` | TEXT | — | — | Bei Erfolg: `backup_id`, `backup_path`, `zip_path`, `download_url`, `timed_out_items` |
@@ -1253,7 +1253,7 @@ sequenceDiagram
         EN->>FS: "SDK-Export bzw. meta.json"
       end
     end
-    EN->>EN: "keine Datei geschrieben? failed erhoehen"
+    EN->>EN: "keine Datei oder Detail fehlgeschlagen? failed erhoehen"
     EN->>DB: "done, failed, errors_json aktualisieren"
   end
 
@@ -1273,7 +1273,7 @@ sequenceDiagram
 
 **Fehler- und Wiederholungsverhalten.** Es gibt **keinen** Retry. Jeder Fehler ist itembezogen: Fehlertext in die Item-Liste, Lauf geht weiter. Ein Timeout beendet nur den betroffenen Aufruf. Wiederholung ist eine **Nutzeraktion** — die Oberfläche bietet nach dem Lauf die Schaltfläche „Retry timed-out items", die einen neuen Job mit genau diesen Items startet (`frontend/src/App.tsx:161-177`).
 
-**Fehlerzählung mit blindem Fleck.** `failed` wird nur erhöht, wenn für ein Item **keine einzige** Datei geschrieben wurde (`backend/app/backup_engine.py:174-175`). Läuft der Detailabruf in einen Timeout, bleibt `detail` auf der Vorschau stehen, und der JSON-Zweig schreibt daraus trotzdem eine Datei — das Item gilt als erfolgreich, obwohl der Gesprächsverlauf nie geladen wurde. Sichtbar bleibt der Verlust nur über `timed_out_items` und die Fehlerliste, nicht über den Zähler.
+**Fehlerzählung.** `failed` wird erhöht, wenn für ein Item keine Datei geschrieben wurde **oder** der Detailabruf scheiterte bzw. in den Timeout lief (`backend/app/backup_engine.py:93-97,177-178`, Flag `detail_ok`). Bis zum QA-Audit am 2026-09-29 zählte ein Item mit bloßer Stub-JSON aus der Vorschau als Erfolg; dieser blinde Fleck ist behoben.
 
 **Abbruch mitten im Lauf.** Das Abbruchflag wird **zwischen** zwei Items geprüft (`backend/app/backup_engine.py:85-86`); das laufende Item wird zu Ende verarbeitet. Nach dem Verlassen der Schleife läuft der reguläre Abschluss vollständig durch: Manifest, Fehlerprotokoll, Übersichtsseite, ZIP und Datenbankeintrag entstehen auch bei `cancelled` (`backend/app/backup_engine.py:191-234`). **Ein abgebrochener Lauf hinterlässt also eine gültige, aber unvollständige Sicherung.**
 
@@ -1369,8 +1369,8 @@ stateDiagram-v2
 | Worker | Ein Thread je Job über `asyncio.to_thread` (`backend/app/jobs.py:37`) | Der Standard-Threadpool von `asyncio` begrenzt die Zahl paralleler Läufe indirekt |
 | Geteilter Zustand | Alle Läufe nutzen **denselben** `AbacusService` und damit denselben SDK-Client (`backend/app/main.py:52`, `backend/app/jobs.py:19`) | `last_warnings` und `_discovered_conversation_scopes` werden von parallelen Läufen gegenseitig überschrieben |
 | Locking | Ein `RLock` je `Database`-Instanz — API und Worker halten **verschiedene** Instanzen (`backend/app/backup_engine.py:60`) | Die eigentliche Serialisierung übernimmt SQLite selbst mit `timeout=30` |
-| Timeout je SDK-Aufruf | Eigener `ThreadPoolExecutor` mit 120 s, bei Zeitüberschreitung `shutdown(wait=False)` (`backend/app/backup_engine.py:14-29`) | Hängende Aufrufe blockieren den Lauf nicht |
-| Executor-Aufräumen | Der `else`-Zweig mit `shutdown(wait=True)` ist **unerreichbar**, weil `return` im `try`-Block ihn überspringt | Je Item entstehen bis zu zwei Executors, die erst die Garbage Collection einsammelt |
+| Timeout je SDK-Aufruf | Eigener `ThreadPoolExecutor` mit 120 s (`backend/app/backup_engine.py:14-28`) | Hängende Aufrufe blockieren den Lauf nicht |
+| Executor-Aufräumen | Seit 2026-09-29 im `finally`: `shutdown(wait=False, cancel_futures=True)` bei Erfolg, Timeout und SDK-Fehler (`backend/app/backup_engine.py:25-28`) | Kein Executor-Leck mehr; ein hängender Worker-Thread blockiert den Job nicht |
 | Abbruchsignal | `threading.Event` je Job, zwischen den Items geprüft | Feinere Granularität als das Item gibt es nicht |
 
 ### Transaktions- und Konsistenzgrenzen
@@ -1582,13 +1582,13 @@ Belege: `frontend/package.json:7-9`, `backend/app/config.py:59,68`, `backend/app
 
 | Artefakt | Erzeugt durch | Inhalt | Beleg |
 |---|---|---|---|
-| `frontend/dist/` | `npm run build` = `tsc -b && vite build` | `index.html` plus `assets/index-*.js` und `assets/index-*.css` mit Content-Hash im Namen. Der eingecheckte Vergleichsstand misst 199 624 Byte JS und 17 204 Byte CSS | `frontend/package.json:8`, `frontend/dist/` |
+| `frontend/dist/` | `npm run build` = `tsc -b && vite build` | `index.html` plus `assets/index-*.js` und `assets/index-*.css` mit Content-Hash im Namen (lokal erzeugt, nicht versioniert) | `frontend/package.json:8` |
 | Container-Image | `docker compose build` bzw. `docker build .` | Zwei Stages: Node-Build, dann Python-Runtime mit kopiertem Bundle | `Dockerfile:1-35` |
 | Backup-ZIPs | Zur Laufzeit je Sicherung | Nutzdaten, kein Build-Artefakt | `backend/app/exporters.py:720-728` |
 
 **Der Typecheck ist Teil des Builds.** `tsc -b` läuft mit `strict: true` vor `vite build`; ein Typfehler bricht den Image-Build ab (`frontend/tsconfig.json:10`, `frontend/package.json:8`).
 
-**`frontend/dist/` ist eingecheckt, wird aber nicht ausgeliefert.** Die `.dockerignore` schließt das Verzeichnis aus (`.dockerignore:6`), damit im Image garantiert der frisch gebaute Stand landet. Zugleich steht `dist/` in der `.gitignore` (`.gitignore:4`) — das Verzeichnis ist also von einer früheren Ergänzung erhalten geblieben. Praktische Folge: Der eingecheckte Stand vom 2026-05-16 kann vom Quellcode abweichen und sollte nicht als Referenz für das Verhalten der Oberfläche dienen.
+**`frontend/dist/` wird nicht versioniert und nicht ausgeliefert.** `dist/` steht in der `.gitignore` (`.gitignore:4`) und ist nicht mehr im Repository (Stand 2026-09-29, `git ls-files frontend/dist` leer); die `.dockerignore` schließt das Verzeichnis zusätzlich aus (`.dockerignore:6`), damit im Image garantiert der frisch gebaute Stand landet.
 
 ### CI/CD
 
@@ -1659,31 +1659,28 @@ curl -fsS http://127.0.0.1:8080/api/health
 | Frontend-Version | `1.0.0` in `frontend/package.json:3` — **manuell** mit der Backend-Version synchron zu halten; es gibt keinen Mechanismus dafür | `frontend/package.json:3` |
 | Changelog | `CHANGELOG.md` im Keep-a-Changelog-Format mit `[Unreleased]`-Abschnitt und `[1.0.0] — 2026-05-08` | `CHANGELOG.md:1-40` |
 | SemVer | Als Konvention erkennbar (`SECURITY.md:5` verspricht Fixes für „die aktuelle Minor-Version der 1.x-Linie"), aber nirgends automatisiert | `SECURITY.md:5` |
-| Git-Tags | ⚠️ siehe Marker |
+| Git-Tags | **keine** — `git tag -l` liefert am 2026-09-29 nichts, obwohl `CHANGELOG.md` ein `[1.0.0] — 2026-05-08` führt | `git tag -l` |
 | Release-Artefakt | Keines. Es gibt keinen Release-Prozess, der ein Image oder Archiv erzeugt | — |
 
-Der `[Unreleased]`-Abschnitt des Changelogs enthält bereits sechs Einträge (Timeout-Behandlung, Retry-Schaltfläche, Export-Reihenfolge, Dokumentation) — die Version im Code steht dennoch unverändert auf `1.0.0`. Wer aus `/api/health` auf den Funktionsstand schließt, liegt daneben.
+Der `[Unreleased]`-Abschnitt des Changelogs enthält bereits zahlreiche Einträge (Timeout-Behandlung, Retry-Schaltfläche, Export-Reihenfolge, Dokumentation, die Fehlerbehebungen aus dem QA-Audit 2026-09-29) — die Version im Code steht dennoch unverändert auf `1.0.0`. Wer aus `/api/health` auf den Funktionsstand schließt, liegt daneben.
 
-> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Ob und welche Git-Tags für Releases vergeben wurden. Der Arbeitsstand dieser Dokumentation wertet nur den Dateibestand und die Commit-Historie des Arbeitsverzeichnisses aus; eine Tag-Konvention ist in keiner Datei des Repositories beschrieben.
+### Build- und Testergebnis (QA-Audit 2026-09-29)
 
-### Stand des Arbeitsverzeichnisses
+Die im Juli nur im Arbeitsverzeichnis liegenden Härtungen (`USER app`, Loopback-Bindung, `no-new-privileges`, Security-Header, `_check_auth_config()`, abgeschaltete `/docs`) sind inzwischen **committet**; der Arbeitsbaum war zum Audit sauber (`PROJEKTSTAND.md`, Abschnitt „Aktivität").
 
-Diese Dokumentation beschreibt das **Arbeitsverzeichnis**, nicht den letzten Commit. Zum Zeitpunkt der Erstellung (2026-07-30) sind folgende Dateien geändert und **nicht committet**:
+| Prüfung | Ergebnis 2026-09-29 | Beleg |
+|---|---|---|
+| Testsuite | **nicht vorhanden** — kein Testverzeichnis, keine CI | `PROJEKTSTAND.md`, Abschnitt „Build/Test" |
+| `python -m compileall backend/app` | grün | ebd. |
+| Smoke-Skript (venv mit FastAPI) gegen die im Audit geänderten Funktionen: Diamant und Zyklus im Export, Basic-Auth mit Umlauten, Timeout/Fehler/Erfolg in `_call_with_timeout` | grün | ebd. |
+| Frontend-Build | **nicht verifiziert** — im Audit nicht ausgeführt | ebd. |
+| Image-Build | **nicht verifiziert** | — |
 
-| Datei | Änderung |
-|---|---|
-| `Dockerfile` | `adduser --system --group app`, `chown -R app:app`, `USER app` ergänzt |
-| `compose.yaml` | Portmapping auf `127.0.0.1:8080:8080` geändert, `security_opt: no-new-privileges:true` ergänzt |
-| `backend/app/main.py` | Security-Header-Middleware, `_check_auth_config()`, `docs_url=None/redoc_url=None/openapi_url=None`, Logger |
-| `.env.example` | Warnhinweis zur Basic-Auth; zusätzlich der beim Erstellen dieser Dokumentation ergänzte Abschnitt mit den fünf fehlenden Variablen |
-| `todo2026.md` | Review-Stand aktualisiert |
-| `MONETARISIERUNGSBEWERTUNG.md` | neu, nicht getrackt |
-
-**Konsequenz:** Wer den Commit `73f2b41` deployt, bekommt einen **root-Container ohne Security-Header, mit offener API-Dokumentation und LAN-weitem Portmapping**. Der erste Schritt vor jedem weiteren Vorhaben sollte das Einchecken dieser Änderungen sein.
+Im Audit behoben (Code-Commit `cf227a3`): Executor-Leck in `_call_with_timeout` (`backend/app/backup_engine.py:14-28`), Fehlerzählung bei fehlgeschlagenem Detail-Abruf (`backend/app/backup_engine.py:93-97,177-178`), UTF-8-Bytevergleich in `basic_auth_matches` (`backend/app/security.py:111-114`) und pfadbezogenes `seen` im Export (`backend/app/exporters.py:57-66`).
 
 ### Marker in diesem Dokument
 
-- ⚠️ NICHT ERMITTELBAR — Existenz und Konvention von Git-Release-Tags
+Keine. Der frühere Marker zu Git-Release-Tags ist seit 2026-09-29 geschlossen (es gibt keine Tags).
 
 ---
 
@@ -1839,7 +1836,7 @@ Es gibt **keinen** Reimport-Mechanismus: Kein Codepfad liest bestehende Verzeich
 | **Geteilter SDK-Client** | Alle Jobs nutzen denselben `AbacusService`; `last_warnings` und die entdeckten Scopes werden von parallelen Läufen überschrieben | `backend/app/main.py:52`, `backend/app/jobs.py:19` |
 | **Keine Begrenzung paralleler Jobs** | Jeder `POST /api/export` startet sofort einen weiteren Lauf; es gibt keine Warteschlange und kein Limit | `backend/app/jobs.py:26-33` |
 | **Sequenzieller Durchsatz** | Innerhalb eines Laufs wird streng ein Item nach dem anderen verarbeitet. Bei 1 000 Konversationen und je 2 Sekunden Antwortzeit dauert ein Lauf über eine halbe Stunde; ein einziger Timeout kostet zusätzlich 120 Sekunden | `backend/app/backup_engine.py:84-189` |
-| **Executor-Leck** | Je Item entstehen bis zu zwei `ThreadPoolExecutor`, die auf dem Erfolgspfad nie heruntergefahren werden | `backend/app/backup_engine.py:14-29` |
+| **Hängende Worker-Threads** | Seit 2026-09-29 wird jeder Executor im `finally` heruntergefahren; ein in den Timeout gelaufener SDK-Aufruf lebt aber als Thread weiter, bis das SDK zurückkehrt | `backend/app/backup_engine.py:14-28` |
 | **`GET /api/backups` wird langsam** | `size_bytes` wird bei jedem Aufruf durch rekursives Durchlaufen jedes Backup-Verzeichnisses berechnet | `backend/app/utils.py:93-104`, `backend/app/database.py:179` |
 | **Kein Rate-Limit** | Weder für Basic-Auth-Versuche noch für `POST /api/connect`; ohne vorgelagerten Proxy ist beides unbegrenzt versuchbar | keine Limiter-Middleware in `main.py` |
 | **Keine Ressourcengrenzen** | Compose setzt weder CPU- noch Speichergrenze | `compose.yaml` ohne `deploy`/`mem_limit` |
@@ -1856,7 +1853,7 @@ Authentifizierung, Umgang mit dem Abacus-API-Schlüssel, Verarbeitung personenbe
 
 [← Zurück zum Index](#dokumentation--app-abacus-chat-backup)
 
-> **Wichtiger Hinweis zum Stand:** Die Security-Header-Middleware, die Prüfung halb konfigurierter Auth, die Abschaltung von `/docs`, der unprivilegierte Container-Benutzer und die Loopback-Bindung des Ports liegen als **nicht committete Änderungen** im Arbeitsverzeichnis (`git status`: `M backend/app/main.py`, `M Dockerfile`, `M compose.yaml`). Der zuletzt eingecheckte Stand `73f2b41` hat **keine** dieser Härtungen. Wer diesen Commit deployt, deployt einen root-Container mit offener API-Dokumentation und LAN-weitem Portmapping. Alle Aussagen unten beziehen sich auf das Arbeitsverzeichnis.
+> **Hinweis zum Stand (aktualisiert 2026-09-29):** Die Security-Header-Middleware, die Prüfung halb konfigurierter Auth, die Abschaltung von `/docs`, der unprivilegierte Container-Benutzer und die Loopback-Bindung des Ports sind inzwischen **committet** (Arbeitsbaum zum QA-Audit am 2026-09-29 sauber, `PROJEKTSTAND.md`). Im Audit wurden zusätzlich die Befunde 8, 10 und 14 sowie das Executor-Leck behoben (Commit `cf227a3`).
 
 ### Authentifizierung und Autorisierung
 
@@ -1869,7 +1866,7 @@ HTTP Basic Authentication mit genau einem Zugangspaar, durchgesetzt in einer ein
 | Geltungsbereich | **Alle** Pfade außer `/api/health` — die Middleware läuft vor jedem Routing | `backend/app/main.py:87-100` |
 | Verhalten ohne Konfiguration | **fail-open**: Sind beide Variablen leer, ist `basic_auth_enabled` falsch und jede Anfrage geht ungeprüft durch | `backend/app/config.py:29-31` |
 | Verhalten bei halber Konfiguration | **fail-fast**: `RuntimeError` im Startup-Hook, der Container startet nicht | `backend/app/main.py:115-125` |
-| Vergleich der Zugangsdaten | `hmac.compare_digest` für Benutzername und Passwort | `backend/app/security.py:111` |
+| Vergleich der Zugangsdaten | `hmac.compare_digest` für Benutzername und Passwort, jeweils auf UTF-8-Bytes (seit 2026-09-29; beide Vergleiche werden immer ausgeführt) | `backend/app/security.py:111-114` |
 | Header-Verarbeitung | Schemaprüfung case-insensitiv, Base64-Dekodierung in `try/except`, Trennung am **ersten** `:` — Passwörter mit Doppelpunkt funktionieren | `backend/app/security.py:101-110` |
 | Antwort bei Fehlschlag | 401 mit `WWW-Authenticate: Basic` und dem Text „Authentication required" | `backend/app/main.py:95-99` |
 | Ausnahmeliste | `frozenset({"/api/health"})`, im Code begründet mit HomeLAB_UX-Polling und Container-Healthcheck | `backend/app/main.py:66-68` |
@@ -1977,24 +1974,24 @@ Das ist bemerkenswert sauber: Der einzige Datenabfluss geht an genau den Dienst,
 
 ### Sicherheitsbefunde
 
-Ergebnis der Code-Durchsicht am 2026-07-30, priorisiert. Die von der Spezifikation geforderte Standardliste ist vollständig abgearbeitet; Negativbefunde stehen im Abschnitt darunter.
+Ergebnis der Code-Durchsicht am 2026-07-30, fortgeschrieben mit dem QA-Audit vom 2026-09-29, priorisiert. Behobene Befunde bleiben zur Nachvollziehbarkeit mit Vermerk **behoben** stehen. Die von der Spezifikation geforderte Standardliste ist vollständig abgearbeitet; Negativbefunde stehen im Abschnitt darunter.
 
 | # | Schwere | Befund | Fundstelle | Empfehlung |
 |---|---|---|---|---|
-| 1 | **hoch** | **Härtungen sind nicht eingecheckt.** Security-Header, Auth-Konfigurationsprüfung, abgeschaltete `/docs`, `USER app` und die Loopback-Bindung liegen nur im Arbeitsverzeichnis. Ein Deployment aus `73f2b41` ist ein root-Container mit offener API-Dokumentation, LAN-weitem Portmapping und ohne Security-Header | `git status`: `M backend/app/main.py`, `M Dockerfile`, `M compose.yaml` | Sofort committen. Bis dahin gilt der Git-Stand als unsicher |
+| 1 | ~~hoch~~ **behoben** | **Härtungen waren nicht eingecheckt.** Security-Header, Auth-Konfigurationsprüfung, abgeschaltete `/docs`, `USER app` und die Loopback-Bindung lagen am 2026-07-30 nur im Arbeitsverzeichnis. **Behoben:** inzwischen committet, Arbeitsbaum am 2026-09-29 sauber | `Dockerfile:27`, `compose.yaml:9-11`, `backend/app/main.py:59,108-138` | — |
 | 2 | **hoch** | **Authentifizierung ist standardmäßig aus.** `basic_auth_enabled` ist nur wahr, wenn beide Variablen gesetzt sind; `compose.yaml` liefert beide als leere Defaults. Im Auslieferungszustand sind damit alle Endpunkte außer `/api/health` ungeschützt — einschließlich Download **und Löschung** vollständiger Chat-Backups sowie `POST /api/connect`, über das ein Angreifer einen fremden API-Schlüssel hinterlegen kann. Entschärft, aber nicht behoben, durch die Loopback-Bindung | `backend/app/config.py:29-31`, `compose.yaml:20-21`, `backend/app/main.py:89` | Auth verpflichtend machen: fehlt die Konfiguration, sollte die Anwendung wie bei halber Konfiguration abbrechen statt offen zu starten. Die Warnzeile beim Start ist eine gute Zwischenlösung, kein Ersatz |
 | 3 | **hoch** | **Chatverläufe liegen unverschlüsselt und unbefristet im Volume**, zusätzlich als ZIP im selben Verzeichnis. Es gibt keine Retention, keine Rotation, keine Verschlüsselung und keine Löschung einzelner Konversationen. Wer Zugriff auf das Volume oder ein Volume-Backup erhält, hat den vollständigen, dauerhaft wachsenden Gesprächsbestand — plus den API-Schlüssel im selben Volume | `backend/app/config.py:59-67`, `backend/app/exporters.py:81-85,720-728`, kein Retention-Code | Konfigurierbare Aufbewahrung (Höchstalter oder Höchstzahl) mit Aufräumen beim Start; Volume-Verschlüsselung empfehlen und in `SECURITY.md` benennen; optional passwortgeschützte ZIPs |
 | 4 | **mittel** | **Kein Rate-Limit und kein Lockout.** Weder die Basic-Auth-Prüfung noch `POST /api/connect` sind begrenzt. Bei Netzexposition ist Passwort-Brute-Force ebenso möglich wie das Durchprobieren fremder API-Schlüssel — letzteres erzeugt zusätzlich Last bei einem Dritten. Fehlversuche werden zudem **nicht protokolliert**, sind also spurlos | `backend/app/main.py:87-100,190-211` | Schlankes In-Memory-Limit auf Auth-Fehlschläge und `/api/connect`; alternativ am Reverse-Proxy. Fehlversuche mindestens auf `WARNING` protokollieren |
 | 5 | **mittel** | **Rohe Exception-Texte gehen an den Client.** `safe_error` entfernt registrierte Secrets, gibt sonst aber `str(exc)` unverändert als HTTP-400-`detail` zurück. Damit können interne Pfade, SDK-Interna und Bibliotheksversionen nach außen gelangen | `backend/app/security.py:97-98`, `backend/app/main.py:211,276,358` | Generische Meldung mit Korrelations-ID an den Client, Volltext ins Serverlog |
 | 6 | **mittel** | **Kein Logging und zwei stumme Ausnahmepfade.** Es gibt keinerlei Betriebsprotokoll außer zwei Startzeilen; die Scope-Discovery und der stille Verbindungsversuch verschlucken jede Ausnahme vollständig. Ein Sicherheitsvorfall oder ein dauerhaft fehlschlagender Verbindungsaufbau hinterlässt keine Spur | `backend/app/main.py:223-224,372-373` | Strukturiertes Logging konfigurieren; beide Stellen mindestens auf `WARNING` protokollieren |
 | 7 | **mittel** | **Stille Truncation bei Listen ohne Paginierungsmetadaten.** Liefert eine SDK-Methode eine nackte Liste ohne Token und ohne `has_more`, endet die Schleife nach Seite 1. `list_chat_sessions` wird ohne explizites `limit` aufgerufen. Bei einem Backup-Werkzeug ist ein stiller Teilexport die gefährlichste Fehlerklasse — er fällt erst auf, wenn man das Backup braucht | `backend/app/abacus_client.py:141-147,265-268` | Explizites `limit` mitgeben und bei `len(page) == limit` offsetbasiert weiterblättern; ins Manifest schreiben, wenn eine Liste exakt an der Seitengrenze endete |
-| 8 | **mittel** | **Ein Timeout-Stub zählt als Erfolg.** `failed` wird nur erhöht, wenn **keine** Datei entstand. Nach einem Detail-Timeout bleibt `detail` auf der Vorschau, der JSON-Zweig schreibt daraus trotzdem eine Datei — das Item gilt als gesichert, obwohl der Verlauf nie geladen wurde. Die Zusammenfassung unterschätzt den Datenverlust systematisch | `backend/app/backup_engine.py:93-102,174-175` | Ein `content_ok`-Flag je Item führen; ein Item gilt als fehlgeschlagen, sobald der Detailabruf scheiterte — unabhängig von geschriebenen Stub-Dateien |
+| 8 | ~~mittel~~ **behoben** | **Ein Timeout-Stub zählte als Erfolg.** `failed` wurde nur erhöht, wenn **keine** Datei entstand; nach einem Detail-Timeout galt ein Item mit Vorschau-Stub als gesichert. **Behoben 2026-09-29:** Ein `detail_ok`-Flag markiert jedes Item mit fehlgeschlagenem oder abgelaufenem Detail-Abruf als `failed`, auch wenn eine Stub-Datei geschrieben wurde | `backend/app/backup_engine.py:93-97,177-178` | — |
 | 9 | **niedrig** | **Kein CSRF-Schutz.** Mit Basic-Auth sendet der Browser die Zugangsdaten automatisch mit. `POST /api/jobs/{id}/cancel` benötigt keinen Body und keinen besonderen Content-Type und ist damit per fremdem Formular auslösbar. Die Endpunkte mit JSON-Pflichtbody sowie `DELETE` sind über ein einfaches Formular nicht erreichbar, und `frame-ancestors 'none'` plus `X-Frame-Options: DENY` verhindern Clickjacking | `backend/app/main.py:299-304,73-84` | Zustandsändernde Endpunkte einen Custom-Header verlangen lassen (erzwingt eine Preflight-Prüfung), oder auf ein Token-Verfahren wechseln |
-| 10 | **niedrig** | **Nicht-ASCII-Zugangsdaten erzeugen HTTP 500 statt 401.** `hmac.compare_digest` akzeptiert `str` nur bei reinem ASCII und wirft sonst `TypeError`. Der `try/except` umschließt nur Dekodierung und Split, nicht den Vergleich in Zeile 111. Ein Benutzername mit Umlaut führt zum Serverfehler; ein konfiguriertes Passwort mit Sonderzeichen macht jede Anmeldung unmöglich | `backend/app/security.py:101-111` | Beide Seiten vor dem Vergleich nach UTF-8 kodieren |
+| 10 | ~~niedrig~~ **behoben** | **Nicht-ASCII-Zugangsdaten erzeugten HTTP 500 statt 401**, weil `hmac.compare_digest` auf `str` nur reines ASCII akzeptiert. **Behoben 2026-09-29:** Beide Seiten werden vor dem Vergleich nach UTF-8 kodiert; Umlaute führen zu 401 | `backend/app/security.py:111-114` | — |
 | 11 | **niedrig** | **Kein Passwort-Hashing im Ruhezustand.** Das Basic-Auth-Passwort steht im Klartext in Umgebung und `.env`; wer `docker inspect` oder `/proc/<pid>/environ` lesen kann, liest es mit | `backend/app/config.py:74-75`, `compose.yaml:20-21` | Statt Klartext einen vorberechneten Hash in der Umgebung ablegen, oder Docker Secrets nutzen |
 | 12 | **niedrig** | **Keine Schemaversionierung der Datenbank.** Nur `CREATE TABLE IF NOT EXISTS`; eine bestehende Datenbank erhält keine später ergänzten Spalten und scheitert dann zur Laufzeit statt beim Start | `backend/app/database.py:17-58` | `PRAGMA user_version` als Gate plus Migrationsliste |
 | 13 | **niedrig** | **`abacusai>=1.4` ohne Obergrenze bei gleichzeitigem Duck-Typing.** Ein Major-Release bricht nicht laut, sondern still: Signaturvarianten passen nicht mehr, `hasattr` liefert `False`, das Backup bleibt leer. Die drei anderen Abhängigkeiten sind korrekt begrenzt | `backend/requirements.txt:4`, `backend/app/abacus_client.py:75-97` | Auf `<2.0` pinnen und die Grenze bewusst und geprüft anheben |
-| 14 | **niedrig** | **Mehrfach referenzierte Objekte gehen im Export verloren.** `_to_plain_data` entfernt die Objekt-ID nach dem Abstieg nicht aus `seen`. Ein Objekt, das legitim an zwei Stellen derselben Struktur vorkommt, wird beim zweiten Vorkommen durch `str(obj)` ersetzt — Inhaltsverlust ohne Fehlermeldung | `backend/app/exporters.py:57-60` | `seen` pfadbezogen führen, also die ID nach dem Abstieg wieder entfernen |
+| 14 | ~~niedrig~~ **behoben** | **Mehrfach referenzierte Objekte gingen im Export verloren**, weil `_to_plain_data` die Objekt-ID nach dem Abstieg nicht aus `seen` entfernte. **Behoben 2026-09-29:** `seen` wird pfadbezogen geführt (`seen.discard` im `finally`); nur echte Zyklen werden abgeschnitten | `backend/app/exporters.py:57-66` | — |
 | 15 | **niedrig** | **Toter Code im Sicherheitsmodul.** `mask_secret` ist definiert, wird aber nirgends aufgerufen. Ungenutzte Funktionen in einem Sicherheitsmodul laden dazu ein, sie später ohne Prüfung zu verwenden | `backend/app/security.py:61-66` | Entfernen oder bewusst einsetzen |
 | 16 | **niedrig** | **Verwaiste Teil-Backups.** Bricht ein Job ab, bleibt ein Verzeichnis ohne Datenbankeintrag zurück: unsichtbar in der Liste, über die API nicht löschbar, dauerhaft Platz belegend — und es enthält personenbezogene Daten | `backend/app/backup_engine.py:63-76` gegenüber `220-226` | Reconciliation beim Start: Verzeichnisse ohne Datenbankeintrag nachtragen oder entfernen |
 
@@ -2016,10 +2013,10 @@ Ergebnis der Code-Durchsicht am 2026-07-30, priorisiert. Die von der Spezifikati
 | **XSS in der Oberfläche** | **Abgesichert.** Kein `dangerouslySetInnerHTML`, kein `innerHTML` im Frontend; sämtliche Ausgabe läuft über die React-Textescapierung |
 | **Offene Debug-Endpunkte** | **Keine.** `/docs`, `/redoc` und `/openapi.json` sind ausdrücklich abgeschaltet, mit Begründung im Code (`backend/app/main.py:57-59`) |
 | **Security-Header** | **Vorhanden:** CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` — gesetzt auf jeder Antwort, auch auf 401. Fehlend: `Strict-Transport-Security` (sinnvollerweise Aufgabe eines TLS-terminierenden Proxys) und `Permissions-Policy` |
-| **Container als root** | **Behoben im Arbeitsverzeichnis:** `adduser --system --group app` plus `USER app` (`Dockerfile:25-27`), ergänzt um `no-new-privileges:true` (`compose.yaml:10-11`). Im eingecheckten Stand aber noch nicht enthalten — siehe Befund 1 |
+| **Container als root** | **Behoben und committet:** `adduser --system --group app` plus `USER app` (`Dockerfile:25-27`), ergänzt um `no-new-privileges:true` (`compose.yaml:10-11`) |
 | **Docker-Socket** | **Nicht gemountet.** Es gibt keinen Socket-Zugriff und keine Docker-API-Nutzung |
 | **Secrets im Repository** | Getrackt sind nur `.env.example` (leere Felder) und `LICENSE`. Keine Schlüssel, keine Datenbank, keine Backups; `.gitignore:1,10-11` schließt `.env`, `data/` und `backups/` aus |
-| **Konstantzeitvergleich** | `hmac.compare_digest` für beide Felder. Die Kurzschlussauswertung überspringt bei falschem Benutzernamen den Passwortvergleich — unkritisch, da der Benutzername kein Geheimnis ist (zur Robustheit siehe Befund 10) |
+| **Konstantzeitvergleich** | `hmac.compare_digest` für beide Felder auf UTF-8-Bytes; seit 2026-09-29 werden beide Vergleiche immer ausgeführt (`backend/app/security.py:111-114`) |
 | **Backup-Integritätsprüfung** | **Vorhanden und ungewöhnlich sorgfältig:** Die Engine vergleicht die Anzahl geladener History-Einträge mit der von der API gemeldeten Gesamtzahl und schreibt das Ergebnis je Item ins Manifest (`backend/app/backup_engine.py:103-108`, `backend/app/exporters.py:120-138`) |
 
 ### Lizenz-Compliance-Fazit
@@ -2064,85 +2061,83 @@ Sammlung aller Marker aus den Dokumenten 01–11, getroffene Annahmen, technisch
 | 7 | UID und GID des Container-Benutzers `app` | [04](#laufzeitparameter) | `adduser --system` vergibt die ID dynamisch; der Wert steht erst im gebauten Image | Feste IDs vergeben (`--uid 10001 --gid 10001`) — löst den Marker dauerhaft auf |
 | 8 | Image-Gesamtgröße und Größe je Layer | [04](#image-größe-und-layer) | Erfordert `docker history` auf einem gebauten Abbild | Nach dem nächsten Build erheben |
 | 9 | Konkrete HTTP-Endpunkte, Basis-URL, Rate Limits, Kontingente und Kosten der Abacus.AI-API | [05](#konsumierte-externe-api) | Der Code spricht ausschließlich SDK-Methoden an; die URLs stecken im Paket `abacusai`, das lokal nicht installiert ist | Nach der Installation den SDK-Quellcode auswerten oder die Anbieterdokumentation heranziehen |
-| 10 | Existenz und Konvention von Git-Release-Tags | [09](#versionierung-und-release-konvention) | In keiner Datei des Repositories beschrieben; die Dokumentation wertet nur Dateibestand und Arbeitsverzeichnis aus | `git tag -l` prüfen und die Konvention in `CHANGELOG.md` oder `RELEASE_README.md` festhalten |
+| 10 | ~~Existenz und Konvention von Git-Release-Tags~~ — **geschlossen 2026-09-29:** es gibt keine Tags (`git tag -l` leer) | [09](#versionierung-und-release-konvention) | — | Release aus `[Unreleased]` schneiden und taggen (siehe P3) |
 
-**Dokumente ohne Marker:** 01, 02, 06, 07, 08, 10 — dort ist jede Aussage aus dem Code belegt.
+**Dokumente ohne Marker:** 01, 02, 06, 07, 08, 09, 10 — dort ist jede Aussage aus dem Code belegt.
 
-**Gemeinsame Wurzel:** Sieben der zehn Marker (1, 2, 3, 4, 6, 7, 8) verschwinden, sobald **einmal** ein Image gebaut und inspiziert wird. Der Rest hängt an fehlenden Konventionen, nicht an fehlendem Zugriff.
+**Gemeinsame Wurzel:** Sieben der neun offenen Marker (1, 2, 3, 4, 6, 7, 8) verschwinden, sobald **einmal** ein Image gebaut und inspiziert wird. Der Rest hängt an fehlenden Konventionen, nicht an fehlendem Zugriff.
 
 ### Getroffene Annahmen
 
 | # | Annahme | Grundlage | Risiko bei Irrtum |
 |---|---|---|---|
-| 1 | Die Dokumentation beschreibt das **Arbeitsverzeichnis**, nicht den Commit `73f2b41` | `git status` zeigt fünf geänderte und eine ungetrackte Datei; die Änderungen enthalten sämtliche Härtungen | Wer nach dem Git-Stand deployt, bekommt eine deutlich unsicherere Anwendung als hier beschrieben — deshalb steht der Hinweis in [04](#04--container--app-abacus-chat-backup), [09](#09--build-und-deployment--app-abacus-chat-backup) und [11](#11--sicherheit-und-compliance--app-abacus-chat-backup) |
+| 1 | ~~Die Dokumentation beschreibt das Arbeitsverzeichnis, nicht den Commit `73f2b41`~~ — **entfallen 2026-09-29:** alle Härtungen sind committet, der Arbeitsbaum war zum QA-Audit sauber | `PROJEKTSTAND.md`, Abschnitt „Aktivität" | — |
 | 2 | `python:3.11-slim` folgt dem aktuellen Debian-Stable | Übliche Bauweise der offiziellen Python-Images; im Tag nicht ausgewiesen | Gering — betrifft nur die Beschreibung, nicht das Verhalten |
 | 3 | Die Lizenzen `fastapi` (MIT), `uvicorn` (BSD-3-Clause) und `pydantic` (MIT) entsprechen dem allgemein bekannten Stand | Paketwissen, ausdrücklich als **nicht verifiziert** gekennzeichnet | Gering; alle drei sind permissiv und seit Jahren stabil lizenziert |
 | 4 | `ZIEL_LIZENZ` = proprietär gilt auch für dieses Projekt | Vorgabe aus `docs/_doc-spec.md` | **Hoch** — das Projekt trägt eine MIT-Lizenz und `SECURITY.md` geht von einem öffentlichen Repository aus. Möglicherweise ist die Zielvorgabe hier schlicht die falsche |
 | 5 | Der Betrieb erfolgt als Einzelplatzwerkzeug hinter Loopback | `SECURITY.md:18`, Kommentar in `compose.yaml:6-8` | Bei Netzbetrieb ohne Basic-Auth ist die Anwendung vollständig offen |
 | 6 | Die Angaben zum Ressourcenbedarf in [04](#ressourcenbedarf) sind **geschätzt** | Kein laufender Container, keine `docker stats`-Messung | Als Schätzung gekennzeichnet; für Kapazitätsplanung nicht belastbar |
-| 7 | `frontend/dist/` bildet nicht zwingend den aktuellen Quellcode ab | Verzeichnis vom 2026-05-16, steht in `.gitignore` und in `.dockerignore` | Wer den eingecheckten Build als Referenz nimmt, beschreibt möglicherweise einen veralteten Stand der Oberfläche |
+| 7 | ~~`frontend/dist/` bildet nicht zwingend den aktuellen Quellcode ab~~ — **entfallen:** `frontend/dist/` ist nicht mehr versioniert (`git ls-files frontend/dist` leer am 2026-09-29) | `.gitignore:4` | — |
 
 ### Technische Schulden
 
-Aufwand: **S** (< 1 Tag) · **M** (1–3 Tage) · **L** (1–2 Wochen) · **XL** (> 2 Wochen). Risiko bezieht sich auf die Folge bei Nichtstun.
+Stand 2026-09-29: erledigte Schulden bleiben durchgestrichen zur Nachvollziehbarkeit stehen. Aufwand: **S** (< 1 Tag) · **M** (1–3 Tage) · **L** (1–2 Wochen) · **XL** (> 2 Wochen). Risiko bezieht sich auf die Folge bei Nichtstun.
 
 | # | Schuld | Aufwand | Risiko | Fundstelle |
 |---|---|---|---|---|
-| 1 | **Härtungen nicht eingecheckt** — Security-Header, `USER app`, Loopback-Bindung, Auth-Prüfung, abgeschaltete `/docs` liegen nur im Arbeitsverzeichnis | S | **hoch** | `git status` |
-| 2 | **Auth standardmäßig aus**, während alle Endpunkte inklusive Backup-Download und -Löschung dahinter liegen | S | **hoch** | `backend/app/config.py:29-31` |
+| 1 | ~~Härtungen nicht eingecheckt~~ — **erledigt** (committet, Stand 2026-09-29) | S | — | `Dockerfile:27`, `compose.yaml:9-11`, `backend/app/main.py` |
+| 2 | **Auth standardmäßig aus**, während alle Endpunkte inklusive Backup-Download und -Löschung dahinter liegen. **Teilweise erledigt:** halbe Konfiguration bricht den Start ab, Port nur an Loopback gebunden; ohne beide Variablen bleibt die API offen | S | mittel | `backend/app/config.py:29-31`, `backend/app/main.py:115-138` |
 | 3 | **Keine Retention, keine Verschlüsselung der Sicherungen** — unbefristet wachsender Klartextbestand personenbezogener Daten im selben Volume wie der API-Schlüssel | M | **hoch** | `backend/app/config.py:59-67` |
 | 4 | **Stille Truncation der Paginierung** — Teilbackup ohne Fehlermeldung; bei einem Backup-Werkzeug die gefährlichste Fehlerklasse | M | **hoch** | `backend/app/abacus_client.py:141-147` |
-| 5 | **Timeout-Stub zählt als Erfolg** — die Erfolgsstatistik unterschätzt den Datenverlust systematisch | S | **hoch** | `backend/app/backup_engine.py:174-175` |
+| 5 | ~~Timeout-Stub zählt als Erfolg~~ — **erledigt 2026-09-29** (`detail_ok`-Flag) | S | — | `backend/app/backup_engine.py:93-97,177-178` |
 | 6 | **Keine Tests, keine CI** — die risikoreichsten Teile (Paginierung, Nachrichtenerkennung, Rollennormalisierung, Vollständigkeitsheuristik, Markdown-Erzeugung) sind reine Funktionen und ohne Infrastruktur testbar. Die Schulden 4, 5 und 12 wären durch Unit-Tests aufgefallen | L | **hoch** | kein Testverzeichnis, keine Workflows |
 | 7 | **Kein Retry, kein Backoff, kein 429-Handling** — dafür Lastverstärkung im Fehlerfall, weil `try_call_variants` bei **jedem** Fehler die nächste Variante probiert | M | mittel | `backend/app/abacus_client.py:100-110` |
-| 8 | **Kein strukturiertes Logging**, dazu zwei stumm verschluckte Ausnahmen — im Betrieb gibt es serverseitig keine Spur | M | mittel | `backend/app/main.py:223-224,372-373` |
+| 8 | **Kein strukturiertes Logging**, dazu zwei stumm verschluckte Ausnahmen. **Teilweise:** ein `logging`-Logger protokolliert den Auth-Status, es fehlt aber eine Logging-Konfiguration (INFO geht unter uvicorn verloren) | M | mittel | `backend/app/main.py:223-224,372-373` |
 | 9 | **Kein Rate-Limit, kein Lockout, kein Auth-Logging** | M | mittel | `backend/app/main.py:87-100` |
 | 10 | **Kein Python-Lockfile** — Builds sind nicht reproduzierbar; `abacusai` ohne Obergrenze bei gleichzeitigem Duck-Typing | S | mittel | `backend/requirements.txt:1-4` |
 | 11 | **Verwaiste Teil-Backups** — Verzeichnisse ohne Datenbankeintrag sind unsichtbar, nicht löschbar und enthalten personenbezogene Daten | M | mittel | `backend/app/backup_engine.py:63-76` |
-| 12 | **Executor wird auf dem Erfolgspfad nie heruntergefahren** — der `else`-Zweig ist unerreichbar, weil `return` im `try`-Block ihn überspringt | S | mittel | `backend/app/backup_engine.py:14-29` |
+| 12 | ~~Executor wird auf dem Erfolgspfad nie heruntergefahren~~ — **erledigt 2026-09-29** (`finally: pool.shutdown(wait=False, cancel_futures=True)`) | S | — | `backend/app/backup_engine.py:14-28` |
 | 13 | **Doppelte Exporte organisationsweiter Konversationen** — `include_org_level_conversations` liefert dieselbe Konversation je Deployment, der Dedupe-Schlüssel unterscheidet sie | S | mittel | `backend/app/abacus_client.py:436,292-296` |
 | 14 | **Keine Schemaversionierung** — `CREATE TABLE IF NOT EXISTS` ohne Migrationspfad | S | mittel | `backend/app/database.py:17-58` |
 | 15 | **Rohe Exception-Texte an den Client** | S | mittel | `backend/app/security.py:97-98` |
 | 16 | **Kein CSRF-Schutz** bei Basic-Auth; `POST /api/jobs/{id}/cancel` ist per fremdem Formular auslösbar | S | niedrig | `backend/app/main.py:299-304` |
-| 17 | **Nicht-ASCII-Zugangsdaten erzeugen HTTP 500** statt 401 | S | niedrig | `backend/app/security.py:101-111` |
-| 18 | **Datenverlust bei mehrfach referenzierten Objekten** im Export (`seen`-Set wird nicht pfadbezogen geführt) | S | niedrig | `backend/app/exporters.py:57-60` |
+| 17 | ~~Nicht-ASCII-Zugangsdaten erzeugen HTTP 500~~ — **erledigt 2026-09-29** (Bytevergleich) | S | — | `backend/app/security.py:111-114` |
+| 18 | ~~Datenverlust bei mehrfach referenzierten Objekten~~ — **erledigt 2026-09-29** (`seen` pfadbezogen) | S | — | `backend/app/exporters.py:57-66` |
 | 19 | **Chat-Cache ohne TTL** — `refreshed_at` wird geschrieben, aber nie ausgewertet | S | niedrig | `backend/app/database.py:229-248` |
 | 20 | **Deprecated Startup-Hook** `@app.on_event("startup")` statt `lifespan`; dazu eine neue SQLite-Verbindung je `update_job` | S | niedrig | `backend/app/main.py:135`, `backend/app/database.py:99-113` |
 | 21 | **Jobtabelle ohne Löschweg** — wächst unbegrenzt, kein `DELETE FROM jobs` im Code | S | niedrig | `backend/app/database.py` |
 | 22 | **Toter Code** `mask_secret` im Sicherheitsmodul | S | niedrig | `backend/app/security.py:61-66` |
 | 23 | **Version im Code fest auf `1.0.0`**, während `CHANGELOG.md` bereits sechs `[Unreleased]`-Einträge führt; Frontend-Version manuell zu synchronisieren | S | niedrig | `backend/app/models.py:9`, `frontend/package.json:3` |
 | 24 | **Frontend-Build-Kette auf Vite 5.x und React 18.x**; `dev` und `preview` binden auf `0.0.0.0` | M | niedrig | `frontend/package.json:7-9,13-24` |
-| 25 | **`frontend/dist/` eingecheckt**, obwohl in `.gitignore` und `.dockerignore` — irreführender Doppelstand | S | niedrig | `frontend/dist/`, `.gitignore:4` |
+| 25 | ~~`frontend/dist/` eingecheckt~~ — **erledigt** (nicht mehr versioniert, Stand 2026-09-29) | S | — | `.gitignore:4` |
 
 ### Empfohlene nächste Schritte
 
-#### Sofort — vor jedem weiteren Betrieb
+Priorisierung deckungsgleich mit „Offene Probleme nach Priorität" in `PROJEKTSTAND.md` (QA-Audit 2026-09-29).
 
-1. **Härtungen committen** (Schuld 1, S). Solange die Änderungen nur im Arbeitsverzeichnis liegen, ist jeder Deploy aus Git ein root-Container mit offener `/docs`, ohne Security-Header und mit LAN-weitem Portmapping. Ein einziger Commit schließt das.
-2. **Auth verpflichtend machen** (Schuld 2, S). Fehlt die Konfiguration vollständig, sollte die Anwendung abbrechen — genau wie bei halber Konfiguration. Der aktuelle Zustand „startet offen und schreibt eine Warnzeile" ist die richtige Zwischenlösung, aber kein Endzustand, wenn hinter der Schranke vollständige Chatverläufe liegen.
+#### P1
 
-#### Kurzfristig — die drei Stellen, an denen ein Backup lautlos unvollständig ist
+1. **Stille Truncation bei Bare-List-Paginierung** (Schuld 4, M) — `backend/app/abacus_client.py:141-146`: liefert eine SDK-Methode eine nackte Liste ohne `page_token`/`has_more`, endet die Schleife nach der ersten Seite, ältere Chats fehlen unbemerkt. Explizites `limit`, bei `len(page) == limit` weiterblättern, im Manifest vermerken.
 
-3. **Paginierung reparieren** (Schuld 4, M). Explizites `limit` mitgeben und bei `len(page) == limit` offsetbasiert weiterblättern; im Manifest vermerken, wenn eine Liste exakt an der Seitengrenze endete.
-4. **Fehlerzählung korrigieren** (Schuld 5, S). Ein `content_ok`-Flag je Item; ein Item ist fehlgeschlagen, sobald der Detailabruf scheiterte — unabhängig davon, ob eine Stub-Datei entstand.
-5. **Doppelexporte entschärfen** (Schuld 13, S). Zweiter Dedupe-Durchgang auf `(type, id)` für organisationsweit markierte Einträge.
+#### P2
 
-Diese drei Punkte betreffen die Kernzusage des Werkzeugs. Ein Backup, das leise unvollständig ist, ist schlimmer als eines, das sichtbar scheitert.
+2. **Kein Retry/Backoff/`Retry-After`/429-Handling** (Schuld 7, M); `try_call_variants` iteriert auch bei Last-Fehlern weiter und verstärkt die Last.
+3. **Doppelexport organisationsweiter Konversationen** (Schuld 13, S) — Dedupe-Schlüssel enthält `deployment_id` (`backend/app/abacus_client.py:292-294`).
+4. **Backups unverschlüsselt und ohne Retention** unter `/data/backups`, im selben Volume wie die API-Schlüsseldatei (Schuld 3, M).
+5. **`abacusai>=1.4` ohne Obergrenze** trotz Duck-Typing auf Methodensignaturen; kein Python-Lockfile (Schuld 10, S) — schließt zugleich die Marker 2, 3 und 4.
+6. **Keine Tests, keine CI** (Schuld 6, L) — die reinen Funktionen (Paginierung, `_best_message_list`, `_normalize_role`, Markdown-Erzeugung, `safe_filename`) sind ohne Infrastruktur testbar; dazu E2E gegen einen Fake-SDK-Client.
 
-#### Mittelfristig — Datenschutz und Betrieb
+#### P3
 
-6. **Retention und Volume-Schutz** (Schuld 3, M). Konfigurierbares Höchstalter oder Höchstzahl mit Aufräumen beim Start; Verschlüsselungsempfehlung in `SECURITY.md`; optional passwortgeschützte ZIPs. Solange das fehlt, wächst ein unverschlüsselter Klartextbestand personenbezogener Daten unbegrenzt — im selben Volume wie der API-Schlüssel.
-7. **Logging einführen** (Schuld 8, M). Ohne Betriebsprotokoll ist jede Störungsanalyse Raten; die beiden stummen `except`-Pfade sind der schnellste Anfang.
-8. **Reconciliation für verwaiste Verzeichnisse** (Schuld 11, M). Löst zugleich das Problem „Datenbank verloren, Dateien vorhanden" aus [10-betrieb.md](#datenbank-verloren-dateien-vorhanden).
-9. **Retry mit Backoff und `Retry-After`** (Schuld 7, M), und `try_call_variants` nur noch bei echten Signaturfehlern weiteriterieren lassen.
-10. **Python-Lockfile erzeugen und `abacusai<2.0` pinnen** (Schuld 10, S). Schließt zugleich die Marker 2, 3 und 4.
+7. **Logging nur teilweise** (Schuld 8): Logger vorhanden, aber keine Logging-Konfiguration; zwei `except`-Pfade verschlucken Ausnahmen.
+8. **Vite 5.4.21**, `dev`/`preview` mit `--host 0.0.0.0` (Schuld 24).
+9. **`@app.on_event("startup")`** (`backend/app/main.py:135`) statt `lifespan` (Schuld 20); keine Schemaversionierung per `PRAGMA user_version` (Schuld 14).
+10. **Rate-Limit/Lockout/Auth-Logging** an `/api/connect` und Auth-Middleware (Schuld 9); CSRF-Schutz bei Basic-Auth (Schuld 16); generische Fehlermeldungen mit Korrelations-ID (Schuld 15).
+11. **Reconciliation verwaister Teil-Backups** (Schuld 11); Chat-Cache-TTL (Schuld 19); Löschweg für die Jobtabelle (Schuld 21); toter Code `mask_secret` (Schuld 22).
+12. **Versionierung ordnen** (Schuld 23): Release aus `[Unreleased]` schneiden, `APP_VERSION` anheben, Tag setzen.
+13. **Lizenzfrage entscheiden:** `LICENSE` ist MIT, `docs/` nimmt „proprietär" an; bei MIT eine `NOTICE` für Apache-2.0-/CC-BY-4.0-Anteile.
 
-#### Danach — Fundament
-
-11. **Testsuite und CI** (Schuld 6, L). Reine Funktionen zuerst: Paginierung, `_best_message_list`, `_normalize_role`, `_history_complete_by_total_events`, Markdown- und Tabellenerzeugung, `safe_filename`. Dazu ein End-to-End-Test gegen einen Fake-SDK-Client und ein Workflow mit `pytest` und `docker build`.
-12. **Einmal bauen und inspizieren** (S). Schließt sieben der zehn Marker auf einen Schlag: Digests, Systempakete, UID/GID, Layer-Größen, Backend-Versionen und -Lizenzen.
-13. **Lizenzfrage entscheiden** (S). MIT beibehalten und die Zielvorgabe korrigieren, oder proprietär werden und `LICENSE` ersetzen. Bei MIT zusätzlich eine `NOTICE`-Datei für Apache-2.0 und CC-BY-4.0 anlegen.
-14. **Versionierung ordnen** (Schuld 23, S). `APP_VERSION` beim Release erhöhen, `CHANGELOG.md` schließen, Git-Tag setzen — dann ist `/api/health` wieder eine belastbare Auskunft über den Funktionsstand.
+Ergänzend ohne Priorität im Audit: **einmal bauen und inspizieren** (S) — schließt sieben der neun offenen Marker (Digests, Systempakete, UID/GID, Layer-Größen, Backend-Versionen und -Lizenzen).
 
 ### Marker in diesem Dokument
 

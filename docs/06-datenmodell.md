@@ -85,7 +85,7 @@ Zweck: Fortschritt und Ergebnis eines Backup-Laufs, überlebt einen Neustart.
 | `updated_at` | TEXT | NOT NULL | — | Bei **jedem** `update_job` neu gesetzt (`database.py:102`) |
 | `total` | INTEGER | NOT NULL DEFAULT 0 | — | Anzahl aufgelöster Items zu Beginn des Laufs |
 | `done` | INTEGER | NOT NULL DEFAULT 0 | — | Verarbeitete Items; Grundlage der Prozentanzeige |
-| `failed` | INTEGER | NOT NULL DEFAULT 0 | — | Items **ohne jede** geschriebene Datei. Ein Item, für das nur eine Stub-JSON aus der Vorschau entstand, zählt hier **nicht** als Fehler (`backup_engine.py:174-175`) |
+| `failed` | INTEGER | NOT NULL DEFAULT 0 | — | Items ohne geschriebene Datei **oder** mit fehlgeschlagenem/abgelaufenem Detail-Abruf — seit 2026-09-29 zählt auch ein Item, für das nur eine Stub-JSON aus der Vorschau entstand, als Fehler (`backup_engine.py:93-97,177-178`) |
 | `current_item` | TEXT | — | — | `"<type>:<id>"` während der Verarbeitung, sonst `NULL` |
 | `request_json` | TEXT | NOT NULL | — | Der vollständige `ExportRequest` als JSON |
 | `result_json` | TEXT | — | — | Bei Erfolg: `backup_id`, `backup_path`, `zip_path`, `download_url`, `timed_out_items` |

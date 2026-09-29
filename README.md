@@ -2,7 +2,7 @@
 
 A local backup and export manager for Abacus.AI chat conversations, with a FastAPI backend and a lightweight React dashboard for running jobs, checking status, and exporting collected data.
 
-![Status](https://img.shields.io/badge/status-active-brightgreen.svg)
+![Status](https://img.shields.io/badge/status-MVP-yellow.svg)
 ![Backend](https://img.shields.io/badge/backend-FastAPI-teal.svg)
 ![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-blue.svg)
 ![Runtime](https://img.shields.io/badge/runtime-Docker-lightgrey.svg)
@@ -43,7 +43,7 @@ The screenshot shows the main dashboard with connection status, backup progress,
 docker compose -f compose.yaml up --build
 ```
 
-Open the web UI at the port exposed by `compose.yaml`.
+Open the web UI at <http://127.0.0.1:8080>. `compose.yaml` binds the port to loopback only, because the API is unauthenticated unless both `APP_BASIC_AUTH_USER` and `APP_BASIC_AUTH_PASSWORD` are set (setting only one of them aborts the start). Set both before publishing the port on the LAN.
 
 ### Option 2: Local Development
 
@@ -87,17 +87,25 @@ app-abacus-chat-backup/
 ├── backend/
 │   └── app/
 │       ├── main.py
+│       ├── abacus_client.py
 │       ├── backup_engine.py
-│       ├── jobs.py
-│       ├── exporters.py
+│       ├── config.py
 │       ├── database.py
-│       └── abacus_client.py
+│       ├── exporters.py
+│       ├── jobs.py
+│       ├── local_settings.py
+│       ├── models.py
+│       ├── security.py
+│       └── utils.py
 ├── frontend/
 │   └── src/
 │       ├── App.tsx
 │       ├── api.ts
+│       ├── types.ts
 │       └── components/
 ├── docs/
+│   ├── 01-ueberblick.md … 12-offene-punkte.md
+│   ├── openapi.yaml
 │   └── preview-ui.png
 ├── compose.yaml
 └── Dockerfile
@@ -115,7 +123,17 @@ app-abacus-chat-backup/
 - Store API keys only in local environment/configuration files.
 - Do not commit `.env` files or exported chat archives.
 - The repository includes `SECURITY.md`; review it before exposing this app beyond localhost.
-- Treat exports as sensitive because conversations may contain private or business data.
+- Treat exports as sensitive because conversations may contain private or business data. Backups under `/data/backups` are stored unencrypted and without retention, in the same volume as the API key file.
+- The container runs as the unprivileged user `app`; `/docs`, `/redoc` and `/openapi.json` are disabled; the backend sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and a CSP.
+
+## Known Limitations
+
+Status as of the QA audit on 2026-09-29 (details in `PROJEKTSTAND.md`):
+
+- **Possible silent truncation:** if an SDK list method returns a bare list without `page_token`/`has_more`, pagination stops after the first page (`backend/app/abacus_client.py`). Do not treat the tool as a reliable backup until this is fixed.
+- No retry/backoff or HTTP 429 handling for Abacus API calls.
+- Organisation-level conversations may be exported twice.
+- No automated tests and no CI.
 
 ## Development
 
@@ -126,6 +144,8 @@ npm run build
 cd ..\backend
 python -m compileall app
 ```
+
+There is no automated test suite yet; `compileall` only checks syntax.
 
 Use the Docker flow for an end-to-end check before publishing or sharing the tool.
 

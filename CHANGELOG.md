@@ -12,6 +12,17 @@ All notable changes to this project are documented in this file.
 
 - **Export hang after timeout:** `ThreadPoolExecutor` used `shutdown(wait=True)` on exit, so a timed-out Abacus SDK call still blocked the job forever. Timeouts now use `shutdown(wait=False)` so the backup continues.
 - **HTML export order:** Conversation transcript (`*_Konversation.html`) is written before the optional SDK `export_deployment_conversation` call, so deployment chats still get a readable HTML file when the SDK export hangs.
+- **Executor leak in `_call_with_timeout`:** The thread pool is now shut down in a `finally` block (`wait=False, cancel_futures=True`) on success, timeout and SDK errors alike; the previous `else` branch was unreachable (QA-Audit 2026-09-29).
+- **Timed-out/failed details counted as success:** A `detail_ok` flag marks items whose full history could not be loaded as `failed`, even if a stub file was written from the preview (QA-Audit 2026-09-29).
+- **Export content loss for shared objects:** `_to_plain_data` tracks visited objects per path, so objects referenced twice (diamond, not cycle) are exported in full instead of being replaced by `str(obj)` (QA-Audit 2026-09-29).
+
+### Security
+
+- **Basic-Auth with non-ASCII credentials:** `basic_auth_matches` compares UTF-8 bytes; usernames/passwords with umlauts now yield 401 instead of a `TypeError`/HTTP 500 (QA-Audit 2026-09-29).
+
+### Docs
+
+- `PROJEKTSTAND.md`, `todo2026.md`, `docs/` chapters 01–12 and README updated to the verified state of 2026-09-29 (QA-Audit 2026-09-29).
 
 ### Added
 
