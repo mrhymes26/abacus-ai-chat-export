@@ -108,4 +108,7 @@ def basic_auth_matches(header: str | None, expected_user: str, expected_password
         user, password = decoded.split(":", 1)
     except Exception:
         return False
-    return hmac.compare_digest(user, expected_user) and hmac.compare_digest(password, expected_password)
+    # Compare bytes: compare_digest raises TypeError on non-ASCII str (-> HTTP 500).
+    user_ok = hmac.compare_digest(user.encode("utf-8"), expected_user.encode("utf-8"))
+    password_ok = hmac.compare_digest(password.encode("utf-8"), expected_password.encode("utf-8"))
+    return user_ok and password_ok

@@ -58,7 +58,15 @@ def _to_plain_data(obj: Any, seen: set[int], depth: int) -> Any:
     if obj_id in seen:
         return redact_secrets_from_text(str(obj))
     seen.add(obj_id)
+    try:
+        return _to_plain_container(obj, seen, depth)
+    finally:
+        # Path-scoped: only ancestors guard against cycles, so an object that is
+        # legitimately referenced twice (diamond) is exported both times.
+        seen.discard(obj_id)
 
+
+def _to_plain_container(obj: Any, seen: set[int], depth: int) -> Any:
     if hasattr(obj, "to_dict") and callable(obj.to_dict):
         try:
             return _to_plain_data(obj.to_dict(), seen, depth + 1)

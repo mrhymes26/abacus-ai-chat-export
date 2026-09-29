@@ -22,11 +22,10 @@ def _call_with_timeout(func: Callable[..., T], *args: Any, timeout: int = DETAIL
     future = pool.submit(func, *args)
     try:
         return future.result(timeout=timeout)
-    except concurrent.futures.TimeoutError:
+    finally:
+        # Always release the executor (success, timeout or SDK error). wait=False
+        # so a hung worker thread never blocks the backup job.
         pool.shutdown(wait=False, cancel_futures=True)
-        raise
-    else:
-        pool.shutdown(wait=True)
 
 from .abacus_client import AbacusService
 from .config import get_settings
@@ -89,9 +88,13 @@ def run_backup_job(
             item_errors: list[str] = []
             path_base = _path_base_for_item(item, ai_dir if item.type == "ai_chat" else deployment_dir)
             detail: Any = item.raw_preview or {}
+            # False if the full history could not be loaded; the item then counts
+            # as failed even though a stub file from the preview may be written.
+            detail_ok = False
 
             try:
                 detail = _call_with_timeout(abacus_service.get_chat_detail, item)
+                detail_ok = True
             except concurrent.futures.TimeoutError:
                 item_errors.append(
                     f"{item.type}:{item.id}: Failed to fetch detail: "
@@ -171,7 +174,7 @@ def run_backup_job(
                     except Exception as exc:
                         item_errors.append(f"{item.type}:{item.id}: HTML export failed: {safe_error(exc)}")
 
-            if not item_files:
+            if not item_files or not detail_ok:
                 failed += 1
             errors.extend(item_errors)
             manifest_items.append(
