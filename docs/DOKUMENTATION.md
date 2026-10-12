@@ -7,9 +7,9 @@
 | Projekt | `app-abacus-chat-backup` |
 | Pfad | `app-abacus-chat-backup/` |
 | Version | NICHT ERMITTELBAR (Quelle: `kein Manifest mit Versionsfeld gefunden`) |
-| Git-Commit | `cf227a3` |
+| Git-Commit | `f149b86` |
 | Branch | `main` |
-| Generiert am | 2026-09-29 |
+| Generiert am | 2026-10-12 |
 | Teildokumente | 12 von 12 |
 
 
@@ -394,7 +394,9 @@ Laufzeitumgebungen, direkte Abhängigkeiten mit aufgelösten Versionen, Lizenzü
 
 Es gibt **keine** `.nvmrc`, kein `engines`-Feld in `frontend/package.json` und keine `python_requires`-Angabe. Die einzigen verbindlichen Versionsaussagen sind die beiden Basis-Images. Der lokale Entwicklungshost ist davon unabhängig; `README.md:35` nennt „Python 3.11+" und „Node.js 20+" als Anforderung.
 
-> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Die genauen Patch-Versionen der Basis-Images (`python:3.11-slim`, `node:20-bookworm-slim`) und deren Digests. Beide Tags sind beweglich, und es liegt kein gebautes Image vor (`docker images` zeigt kein Abbild dieses Projekts). Ein Build würde `pip install` und `npm ci` und damit Netzwerkzugriff erfordern, was für diese Dokumentation ausgeschlossen ist.
+**Ergänzung 2026-10-12:** Das lokale Image `abacus-backup-verify:local` (erstellt 2026-07-28, `docker image inspect`) weist Python **3.11.15** auf Debian 13 („trixie") aus (`PYTHON_VERSION` im Image-Environment, siehe [04-container.md](#basis-images)). Ob es aus dem heutigen Quellstand gebaut wurde, ist nicht belegt.
+
+> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Die Patch-Version des Node-Basis-Images (`node:20-bookworm-slim`, Build-Stage nicht im finalen Image) sowie die SHA-256-Digests beider Basis-Images (`RepoDigests` des lokalen Images enthält nur das lokale Image). Beide Tags sind beweglich. Ein neuer Build würde `pip install` und `npm ci` und damit Netzwerkzugriff erfordern, was für diese Dokumentation ausgeschlossen ist.
 
 ### Backend
 
@@ -411,7 +413,7 @@ Quelle: `backend/requirements.txt:1-4`. **Es existiert kein Lockfile** (kein `uv
 
 **Auffällig:** `abacusai` ist die einzige Abhängigkeit **ohne Obergrenze**, und zugleich diejenige, die per Introspektion angesprochen wird. Genau diese Kombination bricht bei einem Major-Release nicht laut, sondern still: Signaturvarianten passen nicht mehr, `hasattr` liefert `False`, und das Backup bleibt leer statt zu scheitern (`backend/app/abacus_client.py:75-97,220-224`). Der Befund ist im projekteigenen Review als offener Punkt notiert (`todo2026.md`, Abschnitt „Niedrig", Eintrag zu `backend/requirements.txt:4`).
 
-> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Alle vier aufgelösten Backend-Versionen. Es gibt kein Lockfile, keine eingecheckte virtuelle Umgebung und kein gebautes Image; `pip install` ist für diese Dokumentation ausgeschlossen. Die tatsächlich installierten Versionen hängen davon ab, wann das Image zuletzt gebaut wurde.
+> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Alle vier aufgelösten Backend-Versionen. Es gibt kein Lockfile und keine eingecheckte virtuelle Umgebung; das lokale Image `abacus-backup-verify:local` enthält die installierten Pakete, ließe sich aber nur per Container-Start (`pip freeze`) auslesen, was für diese Dokumentation ausgeschlossen ist; `pip install` ebenso. Die tatsächlich installierten Versionen hängen davon ab, wann das Image zuletzt gebaut wurde.
 
 > ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Der vollständige transitive Abhängigkeitsbaum des Backends inklusive Lizenzen. `abacusai` zieht erfahrungsgemäß einen umfangreichen Datenanalyse-Unterbau nach; ohne Installation lässt sich weder die Paketliste noch deren Lizenzverteilung belegen.
 
@@ -477,7 +479,7 @@ Praktische Einordnung zur Vite-Frage: Vite dient hier **ausschließlich dem Buil
 
 ### Marker in diesem Dokument
 
-- ⚠️ NICHT ERMITTELBAR — Patch-Versionen und Digests der beiden Basis-Images (kein gebautes Image, Build netzwerkgebunden)
+- ⚠️ NICHT ERMITTELBAR — Node-Patch-Version und Digests der beiden Basis-Images (Python-Patch 3.11.15 seit 2026-10-12 aus dem lokalen Image belegt; Digests nicht hinterlegt)
 - ⚠️ NICHT ERMITTELBAR — aufgelöste Versionen der vier Backend-Abhängigkeiten (kein Python-Lockfile)
 - ⚠️ NICHT ERMITTELBAR — transitiver Abhängigkeitsbaum des Backends inklusive Lizenzen
 - ⚠️ NICHT ERMITTELBAR — Lizenz von `abacusai` (🔴-Bewertung bis zur Klärung)
@@ -491,7 +493,9 @@ Image-Aufbau, Laufzeitparameter, Ports, Volumes, Start- und Stoppverhalten sowie
 
 [← Zurück zum Index](#dokumentation--app-abacus-chat-backup)
 
-> **Quelle aller Angaben in diesem Dokument: `Dockerfile` und `compose.yaml`, nicht ein gebautes Image.** Auf dem Host existiert kein Abbild dieses Projekts (`docker images` liefert keinen Treffer), und ein Build würde `npm ci` und `pip install` und damit Netzwerkzugriff erfordern, was für diese Dokumentation ausgeschlossen ist. Überall dort, wo die Spezifikation Angaben aus dem Image verlangt (Digest, Systempakete, UID/GID, Layer-Größen), steht ein Marker.
+> **Quelle aller Angaben in diesem Dokument: `Dockerfile` und `compose.yaml`, nicht ein gebautes Image.** Auf dem Host lag bei der Erstellung kein Abbild dieses Projekts vor (siehe Ergänzung unten), und ein Build würde `npm ci` und `pip install` und damit Netzwerkzugriff erfordern, was für diese Dokumentation ausgeschlossen ist. Überall dort, wo die Spezifikation Angaben aus dem Image verlangt (Digest, Systempakete, UID/GID), steht ein Marker.
+
+> **Ergänzung 2026-10-12:** Inzwischen liegt auf dem Host ein lokales Image `abacus-backup-verify:local` (erstellt 2026-07-28, Plattform linux/amd64; `docker image inspect`, `docker history`). Sein Aufbau deckt sich mit dem Dockerfile (`USER app`, `WORKDIR /app`, `CMD uvicorn …`, Port 8080, Healthcheck 30s/3s/20s/3). Aus ihm stammen unten Python-Patchversion, Debian-Release und Layer-Größen. Dass das Image aus genau dem heutigen Quellstand gebaut wurde, ist **nicht belegt** (keine Labels, kein Commit-Vermerk).
 
 > **Stand-Hinweis (aktualisiert 2026-09-29):** Die Härtungen `USER app`, die Loopback-Bindung des Ports und `no-new-privileges` sind inzwischen **committet**; der Arbeitsbaum war zum QA-Audit am 2026-09-29 sauber.
 
@@ -502,9 +506,9 @@ Image-Aufbau, Laufzeitparameter, Ports, Volumes, Start- und Stoppverhalten sowie
 | `frontend-build` | `node:20-bookworm-slim` | Baut das React-Bundle | `Dockerfile:1` |
 | Runtime (unbenannt) | `python:3.11-slim` | Führt die Anwendung aus; erhält das fertige Bundle per `COPY --from` | `Dockerfile:9,20` |
 
-**Betriebssystem:** Beide Images sind Debian-basiert. `node:20-bookworm-slim` nennt Debian 12 („Bookworm") im Tag. `python:3.11-slim` trägt keine Distributionsangabe im Tag — der `slim`-Tag der offiziellen Python-Images folgt dem jeweils aktuellen Debian-Stable, ist aber ohne Image-Inspektion nicht belegbar.
+**Betriebssystem:** Beide Images sind Debian-basiert. `node:20-bookworm-slim` nennt Debian 12 („Bookworm") im Tag. `python:3.11-slim` trägt keine Distributionsangabe im Tag. Laut `docker history` des lokalen Images `abacus-backup-verify:local` stammt die Basisschicht aus `debian.sh … 'trixie'` (Debian 13, Stand 2026-07-13) mit `PYTHON_VERSION=3.11.15`; für künftige Builds ist der bewegliche Tag nicht zugesichert.
 
-> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: SHA-256-Digests beider Basis-Images sowie die exakte Debian-Version des Runtime-Images. Beide Tags sind beweglich; ohne `docker image inspect` auf einem gebauten Abbild ist der tatsächlich verwendete Stand nicht bestimmbar. **Handlungsoption:** Beide `FROM`-Zeilen auf `@sha256:…` pinnen — dann ist der Stand reproduzierbar und dokumentierbar.
+> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: SHA-256-Digests beider Basis-Images (im lokalen Image nicht hinterlegt, `RepoDigests` enthält nur das lokale Image). Beide Tags sind beweglich; die Debian-Version des Runtime-Images ist für den Build vom 2026-07-28 belegt (13 „trixie"), nicht aber für künftige Builds. **Handlungsoption:** Beide `FROM`-Zeilen auf `@sha256:…` pinnen — dann ist der Stand reproduzierbar und dokumentierbar.
 
 ### Multi-Stage-Aufbau
 
@@ -590,9 +594,17 @@ Es sind **keine** Ressourcengrenzen definiert: `compose.yaml` enthält weder `me
 
 ### Image-Größe und Layer
 
-> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Gesamtgröße des Images und Größe je Layer. Erfordert `docker history` bzw. `docker image inspect` auf einem gebauten Abbild; es liegt keines vor.
+Quelle: `docker image inspect` / `docker history` auf `abacus-backup-verify:local` (2026-10-12). Gesamtgröße **466 678 307 Byte (≈ 467 MB)**, 11 Layer im Image-Rootfs. Die drei größten Schichten:
 
-Belegbar ist, **welche** Schichten die Größe bestimmen — die drei größten sind nach Dockerfile-Struktur eindeutig:
+| # | Schicht | Größe |
+|---|---|---|
+| 1 | `RUN pip install --no-cache-dir -r …` (`Dockerfile:17`) | 219 MB |
+| 2 | Debian-Basisschicht (`debian.sh … trixie`) | 87,4 MB |
+| 3 | Python-Build-Schicht des Basis-Images (`savedAptMark …`) | 48,7 MB |
+
+Eigene Schichten darüber: `adduser`/`chown` 463 kB (`Dockerfile:25-26`), Frontend-Bundle 242 kB (`Dockerfile:20`), Backend-Code 172 kB (`Dockerfile:19`), `mkdir -p /data/backups` 12,3 kB (`Dockerfile:22`). Der Stand des Images vom 2026-07-28 ist nicht zwingend der des heutigen Quellcodes.
+
+Belegbar aus der Dockerfile-Struktur ist außerdem, **welche** Schichten die Größe bestimmen:
 
 1. Das Basis-Image `python:3.11-slim` selbst (`Dockerfile:9`).
 2. `RUN pip install --no-cache-dir -r requirements.txt` (`Dockerfile:17`) — vier Pakete samt transitivem Baum, darunter `abacusai`; mit Abstand die größte selbst erzeugte Schicht.
@@ -686,7 +698,7 @@ Damit die Health-Abfrage des Dashboards funktioniert, muss `/api/health` ohne An
 - ⚠️ NICHT ERMITTELBAR — Digests beider Basis-Images und exakte Debian-Version des Runtime-Images
 - ⚠️ NICHT ERMITTELBAR — Systempakete im Image mit Version und Lizenz
 - ⚠️ NICHT ERMITTELBAR — UID und GID des Benutzers `app`
-- ⚠️ NICHT ERMITTELBAR — Image-Gesamtgröße und Größe je Layer
+- ~~Image-Gesamtgröße und Größe je Layer~~ — geschlossen 2026-10-12 (lokales Image `abacus-backup-verify:local`, siehe Abschnitt „Image-Größe und Layer")
 
 ---
 
@@ -2029,8 +2041,8 @@ Ergebnis der Code-Durchsicht am 2026-07-30, fortgeschrieben mit dem QA-Audit vom
 | Frontend-Abhängigkeitsbaum | 🟢 182 Pakete: 165 × MIT, 11 × ISC, 4 × Apache-2.0, 1 × BSD-3-Clause, 1 × CC-BY-4.0. **Kein GPL, kein LGPL, kein AGPL, kein MPL, kein `unknown`** |
 | Apache-2.0 (`typescript` u. a.) | 🟢 unkritisch, **NOTICE-Pflicht bei Weitergabe**. Alle vier Pakete sind Build-Zeit-Werkzeuge und landen nicht im ausgelieferten Bundle |
 | CC-BY-4.0 (`caniuse-lite`) | 🟡 **Namensnennungspflicht** bei Weitergabe. Build-Zeit-Datenbank. **Handlungsoption:** NOTICE-Eintrag |
-| Backend-Abhängigkeiten | 🔴 **Nicht bewertbar.** Es gibt kein Python-Lockfile und kein gebautes Image; die Lizenz von `abacusai` und der gesamte transitive Baum sind unbekannt. Nach dem Bewertungsmaßstab ist `unknown` wie starkes Copyleft zu behandeln. **Handlungsoption:** Beim nächsten Build die Paketmetadaten aus dem Image auslesen und in [03-stack-und-abhaengigkeiten.md](#tabelle-1a--direkte-abhängigkeiten-backend) nachtragen |
-| Container-Basisimages | 🟡 `python:3.11-slim` und `node:20-bookworm-slim` werden unverändert als Basis genutzt; Debian-Pakete bringen eine Mischung permissiver und copyleft-Lizenzen mit, die bei **Weitergabe des Images** relevant würde. Für den reinen Eigenbetrieb unkritisch. Nicht verifiziert, da kein Image vorliegt |
+| Backend-Abhängigkeiten | 🔴 **Nicht bewertbar.** Es gibt kein Python-Lockfile (ein lokales Image existiert, ist aber ohne Container-Start nicht auslesbar); die Lizenz von `abacusai` und der gesamte transitive Baum sind unbekannt. Nach dem Bewertungsmaßstab ist `unknown` wie starkes Copyleft zu behandeln. **Handlungsoption:** Beim nächsten Build die Paketmetadaten aus dem Image auslesen und in [03-stack-und-abhaengigkeiten.md](#tabelle-1a--direkte-abhängigkeiten-backend) nachtragen |
+| Container-Basisimages | 🟡 `python:3.11-slim` und `node:20-bookworm-slim` werden unverändert als Basis genutzt; Debian-Pakete bringen eine Mischung permissiver und copyleft-Lizenzen mit, die bei **Weitergabe des Images** relevant würde. Für den reinen Eigenbetrieb unkritisch. Nicht verifiziert: Das lokale Image `abacus-backup-verify:local` wurde nicht gestartet, die Debian-Paketliste ist daher nicht ausgewertet |
 
 **Gesamtampel: 🔴** — nicht wegen der Abhängigkeiten, die im belegbaren Teil sauber sind, sondern wegen zweier offener Punkte: der **MIT-Lizenz im Widerspruch zur Zielvorgabe** und der **nicht ermittelbaren Backend-Lizenzen**. Beide sind mit überschaubarem Aufwand klärbar.
 
@@ -2052,20 +2064,20 @@ Sammlung aller Marker aus den Dokumenten 01–11, getroffene Annahmen, technisch
 
 | # | Marker | Dokument | Warum nicht ermittelbar | Wie zu schließen |
 |---|---|---|---|---|
-| 1 | Patch-Versionen und SHA-256-Digests der Basis-Images `python:3.11-slim` und `node:20-bookworm-slim`; exakte Debian-Version des Runtime-Images | [03](#laufzeitumgebungen), [04](#basis-images) | Beide Tags sind beweglich; auf dem Host existiert kein gebautes Abbild, und ein Build erfordert Netzwerkzugriff | Einmalig bauen und `docker image inspect` auswerten; dauerhaft die `FROM`-Zeilen auf `@sha256:…` pinnen |
+| 1 | Patch-Versionen und SHA-256-Digests der Basis-Images `python:3.11-slim` und `node:20-bookworm-slim`; exakte Debian-Version des Runtime-Images | [03](#laufzeitumgebungen), [04](#basis-images) | Beide Tags sind beweglich; auf dem Host existiert kein gebautes Abbild, und ein Build erfordert Netzwerkzugriff | Einmalig bauen und `docker image inspect` auswerten; dauerhaft die `FROM`-Zeilen auf `@sha256:…` pinnen. **Teilstand 2026-10-12:** Das lokale Image `abacus-backup-verify:local` weist Python 3.11.15 auf Debian 13 („trixie") aus; ein Basis-Image-Digest ist darin nicht hinterlegt (`RepoDigests` zeigt nur das lokale Image) |
 | 2 | Aufgelöste Versionen der vier Backend-Abhängigkeiten (`fastapi`, `uvicorn`, `pydantic`, `abacusai`) | [03](#tabelle-1a--direkte-abhängigkeiten-backend) | Es existiert **kein** Python-Lockfile und keine eingecheckte virtuelle Umgebung; `requirements.txt` enthält nur Bereiche | `pip freeze` bzw. `uv pip compile` in ein Lockfile schreiben und einchecken |
 | 3 | Vollständiger transitiver Abhängigkeitsbaum des Backends inklusive Lizenzen | [03](#tabelle-1a--direkte-abhängigkeiten-backend) | Kein Lockfile, keine Installation vorhanden | Lockfile erzeugen; Lizenzen aus den Paketmetadaten im gebauten Image auslesen |
 | 4 | Lizenz des Pakets `abacusai` | [03](#tabelle-1a--direkte-abhängigkeiten-backend), [11](#lizenz-compliance-fazit) | Paket liegt lokal nicht vor, Netzwerkabfragen ausgeschlossen. **Bis zur Klärung nach Bewertungsmaßstab 🔴** | `pip show abacusai` im gebauten Image oder die `METADATA` des Wheels lesen |
 | 5 | Release-Daten der Pakete zur Prüfung „letzter Release älter als 24 Monate" | [03](#veraltete-und-ungepflegte-pakete) | Lockfiles enthalten keine Zeitstempel; Registry-Abfragen ausgeschlossen | `npm outdated` bzw. Registry-Abfrage bei nächster Gelegenheit |
 | 6 | Im Image installierte Systempakete mit Version und Lizenz | [04](#im-image-installierte-systempakete) | Das Dockerfile installiert keine zusätzlichen Pakete; alles stammt aus dem Basis-Image und wäre nur per `dpkg -l` im laufenden Container zu ermitteln | `docker compose exec … dpkg -l` nach einem Build |
 | 7 | UID und GID des Container-Benutzers `app` | [04](#laufzeitparameter) | `adduser --system` vergibt die ID dynamisch; der Wert steht erst im gebauten Image | Feste IDs vergeben (`--uid 10001 --gid 10001`) — löst den Marker dauerhaft auf |
-| 8 | Image-Gesamtgröße und Größe je Layer | [04](#image-größe-und-layer) | Erfordert `docker history` auf einem gebauten Abbild | Nach dem nächsten Build erheben |
+| 8 | ~~Image-Gesamtgröße und Größe je Layer~~ — **geschlossen 2026-10-12:** ≈ 467 MB, größte Schicht `pip install` 219 MB (lokales Image `abacus-backup-verify:local`, erstellt 2026-07-28; Übereinstimmung mit dem heutigen Quellstand nicht belegt) | [04](#image-größe-und-layer) | — | Nach dem nächsten Build gegenprüfen |
 | 9 | Konkrete HTTP-Endpunkte, Basis-URL, Rate Limits, Kontingente und Kosten der Abacus.AI-API | [05](#konsumierte-externe-api) | Der Code spricht ausschließlich SDK-Methoden an; die URLs stecken im Paket `abacusai`, das lokal nicht installiert ist | Nach der Installation den SDK-Quellcode auswerten oder die Anbieterdokumentation heranziehen |
 | 10 | ~~Existenz und Konvention von Git-Release-Tags~~ — **geschlossen 2026-09-29:** es gibt keine Tags (`git tag -l` leer) | [09](#versionierung-und-release-konvention) | — | Release aus `[Unreleased]` schneiden und taggen (siehe P3) |
 
 **Dokumente ohne Marker:** 01, 02, 06, 07, 08, 09, 10 — dort ist jede Aussage aus dem Code belegt.
 
-**Gemeinsame Wurzel:** Sieben der neun offenen Marker (1, 2, 3, 4, 6, 7, 8) verschwinden, sobald **einmal** ein Image gebaut und inspiziert wird. Der Rest hängt an fehlenden Konventionen, nicht an fehlendem Zugriff.
+**Gemeinsame Wurzel:** Sechs der acht offenen Marker (1, 2, 3, 4, 6, 7) verschwinden, sobald **einmal** ein Image gebaut und inspiziert wird. Der Rest hängt an fehlenden Konventionen, nicht an fehlendem Zugriff.
 
 ### Getroffene Annahmen
 
@@ -2137,7 +2149,7 @@ Priorisierung deckungsgleich mit „Offene Probleme nach Priorität" in `PROJEKT
 12. **Versionierung ordnen** (Schuld 23): Release aus `[Unreleased]` schneiden, `APP_VERSION` anheben, Tag setzen.
 13. **Lizenzfrage entscheiden:** `LICENSE` ist MIT, `docs/` nimmt „proprietär" an; bei MIT eine `NOTICE` für Apache-2.0-/CC-BY-4.0-Anteile.
 
-Ergänzend ohne Priorität im Audit: **einmal bauen und inspizieren** (S) — schließt sieben der neun offenen Marker (Digests, Systempakete, UID/GID, Layer-Größen, Backend-Versionen und -Lizenzen).
+Ergänzend ohne Priorität im Audit: **einmal bauen und inspizieren** (S) — schließt die verbleibenden Image-Marker (Digests, Systempakete, UID/GID, Backend-Versionen und -Lizenzen); die Layer-Größen sind seit 2026-10-12 aus dem lokalen Image belegt.
 
 ### Marker in diesem Dokument
 

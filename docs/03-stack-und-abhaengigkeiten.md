@@ -14,7 +14,9 @@ Laufzeitumgebungen, direkte Abhängigkeiten mit aufgelösten Versionen, Lizenzü
 
 Es gibt **keine** `.nvmrc`, kein `engines`-Feld in `frontend/package.json` und keine `python_requires`-Angabe. Die einzigen verbindlichen Versionsaussagen sind die beiden Basis-Images. Der lokale Entwicklungshost ist davon unabhängig; `README.md:35` nennt „Python 3.11+" und „Node.js 20+" als Anforderung.
 
-> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Die genauen Patch-Versionen der Basis-Images (`python:3.11-slim`, `node:20-bookworm-slim`) und deren Digests. Beide Tags sind beweglich, und es liegt kein gebautes Image vor (`docker images` zeigt kein Abbild dieses Projekts). Ein Build würde `pip install` und `npm ci` und damit Netzwerkzugriff erfordern, was für diese Dokumentation ausgeschlossen ist.
+**Ergänzung 2026-10-12:** Das lokale Image `abacus-backup-verify:local` (erstellt 2026-07-28, `docker image inspect`) weist Python **3.11.15** auf Debian 13 („trixie") aus (`PYTHON_VERSION` im Image-Environment, siehe [04-container.md](04-container.md#basis-images)). Ob es aus dem heutigen Quellstand gebaut wurde, ist nicht belegt.
+
+> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Die Patch-Version des Node-Basis-Images (`node:20-bookworm-slim`, Build-Stage nicht im finalen Image) sowie die SHA-256-Digests beider Basis-Images (`RepoDigests` des lokalen Images enthält nur das lokale Image). Beide Tags sind beweglich. Ein neuer Build würde `pip install` und `npm ci` und damit Netzwerkzugriff erfordern, was für diese Dokumentation ausgeschlossen ist.
 
 ## Backend
 
@@ -31,7 +33,7 @@ Quelle: `backend/requirements.txt:1-4`. **Es existiert kein Lockfile** (kein `uv
 
 **Auffällig:** `abacusai` ist die einzige Abhängigkeit **ohne Obergrenze**, und zugleich diejenige, die per Introspektion angesprochen wird. Genau diese Kombination bricht bei einem Major-Release nicht laut, sondern still: Signaturvarianten passen nicht mehr, `hasattr` liefert `False`, und das Backup bleibt leer statt zu scheitern (`backend/app/abacus_client.py:75-97,220-224`). Der Befund ist im projekteigenen Review als offener Punkt notiert (`todo2026.md`, Abschnitt „Niedrig", Eintrag zu `backend/requirements.txt:4`).
 
-> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Alle vier aufgelösten Backend-Versionen. Es gibt kein Lockfile, keine eingecheckte virtuelle Umgebung und kein gebautes Image; `pip install` ist für diese Dokumentation ausgeschlossen. Die tatsächlich installierten Versionen hängen davon ab, wann das Image zuletzt gebaut wurde.
+> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Alle vier aufgelösten Backend-Versionen. Es gibt kein Lockfile und keine eingecheckte virtuelle Umgebung; das lokale Image `abacus-backup-verify:local` enthält die installierten Pakete, ließe sich aber nur per Container-Start (`pip freeze`) auslesen, was für diese Dokumentation ausgeschlossen ist; `pip install` ebenso. Die tatsächlich installierten Versionen hängen davon ab, wann das Image zuletzt gebaut wurde.
 
 > ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Der vollständige transitive Abhängigkeitsbaum des Backends inklusive Lizenzen. `abacusai` zieht erfahrungsgemäß einen umfangreichen Datenanalyse-Unterbau nach; ohne Installation lässt sich weder die Paketliste noch deren Lizenzverteilung belegen.
 
@@ -97,7 +99,7 @@ Praktische Einordnung zur Vite-Frage: Vite dient hier **ausschließlich dem Buil
 
 ## Marker in diesem Dokument
 
-- ⚠️ NICHT ERMITTELBAR — Patch-Versionen und Digests der beiden Basis-Images (kein gebautes Image, Build netzwerkgebunden)
+- ⚠️ NICHT ERMITTELBAR — Node-Patch-Version und Digests der beiden Basis-Images (Python-Patch 3.11.15 seit 2026-10-12 aus dem lokalen Image belegt; Digests nicht hinterlegt)
 - ⚠️ NICHT ERMITTELBAR — aufgelöste Versionen der vier Backend-Abhängigkeiten (kein Python-Lockfile)
 - ⚠️ NICHT ERMITTELBAR — transitiver Abhängigkeitsbaum des Backends inklusive Lizenzen
 - ⚠️ NICHT ERMITTELBAR — Lizenz von `abacusai` (🔴-Bewertung bis zur Klärung)

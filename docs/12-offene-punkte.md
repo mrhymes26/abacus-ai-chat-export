@@ -8,20 +8,20 @@ Sammlung aller Marker aus den Dokumenten 01–11, getroffene Annahmen, technisch
 
 | # | Marker | Dokument | Warum nicht ermittelbar | Wie zu schließen |
 |---|---|---|---|---|
-| 1 | Patch-Versionen und SHA-256-Digests der Basis-Images `python:3.11-slim` und `node:20-bookworm-slim`; exakte Debian-Version des Runtime-Images | [03](03-stack-und-abhaengigkeiten.md#laufzeitumgebungen), [04](04-container.md#basis-images) | Beide Tags sind beweglich; auf dem Host existiert kein gebautes Abbild, und ein Build erfordert Netzwerkzugriff | Einmalig bauen und `docker image inspect` auswerten; dauerhaft die `FROM`-Zeilen auf `@sha256:…` pinnen |
+| 1 | Patch-Versionen und SHA-256-Digests der Basis-Images `python:3.11-slim` und `node:20-bookworm-slim`; exakte Debian-Version des Runtime-Images | [03](03-stack-und-abhaengigkeiten.md#laufzeitumgebungen), [04](04-container.md#basis-images) | Beide Tags sind beweglich; auf dem Host existiert kein gebautes Abbild, und ein Build erfordert Netzwerkzugriff | Einmalig bauen und `docker image inspect` auswerten; dauerhaft die `FROM`-Zeilen auf `@sha256:…` pinnen. **Teilstand 2026-10-12:** Das lokale Image `abacus-backup-verify:local` weist Python 3.11.15 auf Debian 13 („trixie") aus; ein Basis-Image-Digest ist darin nicht hinterlegt (`RepoDigests` zeigt nur das lokale Image) |
 | 2 | Aufgelöste Versionen der vier Backend-Abhängigkeiten (`fastapi`, `uvicorn`, `pydantic`, `abacusai`) | [03](03-stack-und-abhaengigkeiten.md#tabelle-1a--direkte-abhängigkeiten-backend) | Es existiert **kein** Python-Lockfile und keine eingecheckte virtuelle Umgebung; `requirements.txt` enthält nur Bereiche | `pip freeze` bzw. `uv pip compile` in ein Lockfile schreiben und einchecken |
 | 3 | Vollständiger transitiver Abhängigkeitsbaum des Backends inklusive Lizenzen | [03](03-stack-und-abhaengigkeiten.md#tabelle-1a--direkte-abhängigkeiten-backend) | Kein Lockfile, keine Installation vorhanden | Lockfile erzeugen; Lizenzen aus den Paketmetadaten im gebauten Image auslesen |
 | 4 | Lizenz des Pakets `abacusai` | [03](03-stack-und-abhaengigkeiten.md#tabelle-1a--direkte-abhängigkeiten-backend), [11](11-sicherheit-compliance.md#lizenz-compliance-fazit) | Paket liegt lokal nicht vor, Netzwerkabfragen ausgeschlossen. **Bis zur Klärung nach Bewertungsmaßstab 🔴** | `pip show abacusai` im gebauten Image oder die `METADATA` des Wheels lesen |
 | 5 | Release-Daten der Pakete zur Prüfung „letzter Release älter als 24 Monate" | [03](03-stack-und-abhaengigkeiten.md#veraltete-und-ungepflegte-pakete) | Lockfiles enthalten keine Zeitstempel; Registry-Abfragen ausgeschlossen | `npm outdated` bzw. Registry-Abfrage bei nächster Gelegenheit |
 | 6 | Im Image installierte Systempakete mit Version und Lizenz | [04](04-container.md#im-image-installierte-systempakete) | Das Dockerfile installiert keine zusätzlichen Pakete; alles stammt aus dem Basis-Image und wäre nur per `dpkg -l` im laufenden Container zu ermitteln | `docker compose exec … dpkg -l` nach einem Build |
 | 7 | UID und GID des Container-Benutzers `app` | [04](04-container.md#laufzeitparameter) | `adduser --system` vergibt die ID dynamisch; der Wert steht erst im gebauten Image | Feste IDs vergeben (`--uid 10001 --gid 10001`) — löst den Marker dauerhaft auf |
-| 8 | Image-Gesamtgröße und Größe je Layer | [04](04-container.md#image-größe-und-layer) | Erfordert `docker history` auf einem gebauten Abbild | Nach dem nächsten Build erheben |
+| 8 | ~~Image-Gesamtgröße und Größe je Layer~~ — **geschlossen 2026-10-12:** ≈ 467 MB, größte Schicht `pip install` 219 MB (lokales Image `abacus-backup-verify:local`, erstellt 2026-07-28; Übereinstimmung mit dem heutigen Quellstand nicht belegt) | [04](04-container.md#image-größe-und-layer) | — | Nach dem nächsten Build gegenprüfen |
 | 9 | Konkrete HTTP-Endpunkte, Basis-URL, Rate Limits, Kontingente und Kosten der Abacus.AI-API | [05](05-api.md#konsumierte-externe-api) | Der Code spricht ausschließlich SDK-Methoden an; die URLs stecken im Paket `abacusai`, das lokal nicht installiert ist | Nach der Installation den SDK-Quellcode auswerten oder die Anbieterdokumentation heranziehen |
 | 10 | ~~Existenz und Konvention von Git-Release-Tags~~ — **geschlossen 2026-09-29:** es gibt keine Tags (`git tag -l` leer) | [09](09-build-deploy.md#versionierung-und-release-konvention) | — | Release aus `[Unreleased]` schneiden und taggen (siehe P3) |
 
 **Dokumente ohne Marker:** 01, 02, 06, 07, 08, 09, 10 — dort ist jede Aussage aus dem Code belegt.
 
-**Gemeinsame Wurzel:** Sieben der neun offenen Marker (1, 2, 3, 4, 6, 7, 8) verschwinden, sobald **einmal** ein Image gebaut und inspiziert wird. Der Rest hängt an fehlenden Konventionen, nicht an fehlendem Zugriff.
+**Gemeinsame Wurzel:** Sechs der acht offenen Marker (1, 2, 3, 4, 6, 7) verschwinden, sobald **einmal** ein Image gebaut und inspiziert wird. Der Rest hängt an fehlenden Konventionen, nicht an fehlendem Zugriff.
 
 ## Getroffene Annahmen
 
@@ -93,7 +93,7 @@ Priorisierung deckungsgleich mit „Offene Probleme nach Priorität" in `PROJEKT
 12. **Versionierung ordnen** (Schuld 23): Release aus `[Unreleased]` schneiden, `APP_VERSION` anheben, Tag setzen.
 13. **Lizenzfrage entscheiden:** `LICENSE` ist MIT, `docs/` nimmt „proprietär" an; bei MIT eine `NOTICE` für Apache-2.0-/CC-BY-4.0-Anteile.
 
-Ergänzend ohne Priorität im Audit: **einmal bauen und inspizieren** (S) — schließt sieben der neun offenen Marker (Digests, Systempakete, UID/GID, Layer-Größen, Backend-Versionen und -Lizenzen).
+Ergänzend ohne Priorität im Audit: **einmal bauen und inspizieren** (S) — schließt die verbleibenden Image-Marker (Digests, Systempakete, UID/GID, Backend-Versionen und -Lizenzen); die Layer-Größen sind seit 2026-10-12 aus dem lokalen Image belegt.
 
 ## Marker in diesem Dokument
 

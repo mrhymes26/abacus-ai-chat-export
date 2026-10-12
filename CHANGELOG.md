@@ -22,6 +22,7 @@ All notable changes to this project are documented in this file.
 
 ### Docs
 
+- 2026-10-12: `docs/` and `PROJEKTSTAND.md` re-checked against the code (routes, env variables, lockfile versions, cited line ranges); `PROJEKTSTAND.md` corrected (component count, commit count/date, LOC), `docs/DOKUMENTATION.md` rebuilt. No code changes.
 - `PROJEKTSTAND.md`, `todo2026.md`, `docs/` chapters 01–12 and README updated to the verified state of 2026-09-29 (QA-Audit 2026-09-29).
 
 ### Added

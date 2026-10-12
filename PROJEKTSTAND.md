@@ -1,6 +1,6 @@
 # Projektstand: app-abacus-chat-backup
 
-Stand: 29. September 2026 · QA-Audit mit Build/Test-Lauf (vorherige Erhebung: 11.08.2026, statisch).
+Stand: 12. Oktober 2026 · Doku gegen Code geprüft (QA-Audit mit Build/Test-Lauf: 29.09.2026; davor statische Erhebung 11.08.2026). Seit 29.09.2026 keine Code-Änderung.
 
 ## Kurzfassung
 
@@ -22,8 +22,8 @@ verlässliches Backup.
 - **Backend:** Python 3.11+, FastAPI + uvicorn, SQLite, `abacusai`-SDK. Module
   unter `backend/app/` (`main.py`, `abacus_client.py`, `backup_engine.py`,
   `exporters.py`, `database.py`, `jobs.py`, `config.py`, `security.py`,
-  `local_settings.py`, `utils.py`, `models.py`) — rund 3.470 Zeilen.
-- **Frontend:** React + TypeScript + Vite 5.4.21 + Tailwind, 8 Komponenten unter
+  `local_settings.py`, `utils.py`, `models.py`) — rund 3.480 Zeilen (`wc -l`, 2026-10-12).
+- **Frontend:** React + TypeScript + Vite 5.4.21 + Tailwind, 9 Komponenten unter
   `frontend/src/components/`.
 - **Betrieb:** Multi-Stage-`Dockerfile` (`USER app`), `compose.yaml` an
   `127.0.0.1:8080`; Backend liefert das React-Bundle same-origin aus.
@@ -33,8 +33,8 @@ verlässliches Backup.
 
 ## Aktivität
 
-- Letzter Commit: 2026-08-11 (Zeilenenden-Normalisierung), 20 Commits, **keine
-  Tags** — obwohl `CHANGELOG.md` ein `[1.0.0] — 2026-05-08` führt.
+- Letzter Commit: `f149b86` 2026-09-29 (Doku-Stand; letzter Code-Commit `cf227a3`
+  2026-09-29), 22 Commits (`git rev-list --count HEAD`), **keine Tags** — obwohl `CHANGELOG.md` ein `[1.0.0] — 2026-05-08` führt.
 - Arbeitsbaum: sauber; die Audit-Änderungen vom 29.09.2026 (siehe unten, samt
   `todo2026.md` und dieser Datei) sind committet.
 - Version: `backend/app/models.py:9` `APP_VERSION = "1.0.0"` und

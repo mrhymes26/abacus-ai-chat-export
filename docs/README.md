@@ -37,8 +37,8 @@ Variante ohne Docker und Details: [09-build-deploy.md](09-build-deploy.md#lokale
 
 | Feld | Wert |
 |---|---|
-| Datum | 2026-07-30, fortgeschrieben 2026-09-29 (QA-Audit) |
-| Git-Commit | Erhebung auf `73f2b41` (2026-07-22); Fortschreibung auf `cf227a3` (2026-09-29, „fix: QA-Audit 2026-09-29 – Fehlerbehebungen und aktualisierter Projektstand") |
+| Datum | 2026-07-30, fortgeschrieben 2026-09-29 (QA-Audit), gegen Code geprüft 2026-10-12 |
+| Git-Commit | Erhebung auf `73f2b41` (2026-07-22); Fortschreibung auf `cf227a3` (2026-09-29, „fix: QA-Audit 2026-09-29 – Fehlerbehebungen und aktualisierter Projektstand"); HEAD zum Prüfzeitpunkt 2026-10-12: `f149b86` (nur Doku-Änderungen gegenüber `cf227a3`) |
 | Branch | `main` |
 | Arbeitsverzeichnis | sauber zum QA-Audit am 2026-09-29 — die im Juli nur lokal vorhandenen Sicherheitshärtungen (unprivilegierter Benutzer, Loopback-Bindung, Security-Header, abgeschaltete `/docs`) sind committet |
 | Projektversion | `1.0.0` (`backend/app/models.py:9`, `frontend/package.json:3`) |

@@ -4,7 +4,9 @@ Image-Aufbau, Laufzeitparameter, Ports, Volumes, Start- und Stoppverhalten sowie
 
 [← Zurück zum Index](README.md)
 
-> **Quelle aller Angaben in diesem Dokument: `Dockerfile` und `compose.yaml`, nicht ein gebautes Image.** Auf dem Host existiert kein Abbild dieses Projekts (`docker images` liefert keinen Treffer), und ein Build würde `npm ci` und `pip install` und damit Netzwerkzugriff erfordern, was für diese Dokumentation ausgeschlossen ist. Überall dort, wo die Spezifikation Angaben aus dem Image verlangt (Digest, Systempakete, UID/GID, Layer-Größen), steht ein Marker.
+> **Quelle aller Angaben in diesem Dokument: `Dockerfile` und `compose.yaml`, nicht ein gebautes Image.** Auf dem Host lag bei der Erstellung kein Abbild dieses Projekts vor (siehe Ergänzung unten), und ein Build würde `npm ci` und `pip install` und damit Netzwerkzugriff erfordern, was für diese Dokumentation ausgeschlossen ist. Überall dort, wo die Spezifikation Angaben aus dem Image verlangt (Digest, Systempakete, UID/GID), steht ein Marker.
+
+> **Ergänzung 2026-10-12:** Inzwischen liegt auf dem Host ein lokales Image `abacus-backup-verify:local` (erstellt 2026-07-28, Plattform linux/amd64; `docker image inspect`, `docker history`). Sein Aufbau deckt sich mit dem Dockerfile (`USER app`, `WORKDIR /app`, `CMD uvicorn …`, Port 8080, Healthcheck 30s/3s/20s/3). Aus ihm stammen unten Python-Patchversion, Debian-Release und Layer-Größen. Dass das Image aus genau dem heutigen Quellstand gebaut wurde, ist **nicht belegt** (keine Labels, kein Commit-Vermerk).
 
 > **Stand-Hinweis (aktualisiert 2026-09-29):** Die Härtungen `USER app`, die Loopback-Bindung des Ports und `no-new-privileges` sind inzwischen **committet**; der Arbeitsbaum war zum QA-Audit am 2026-09-29 sauber.
 
@@ -15,9 +17,9 @@ Image-Aufbau, Laufzeitparameter, Ports, Volumes, Start- und Stoppverhalten sowie
 | `frontend-build` | `node:20-bookworm-slim` | Baut das React-Bundle | `Dockerfile:1` |
 | Runtime (unbenannt) | `python:3.11-slim` | Führt die Anwendung aus; erhält das fertige Bundle per `COPY --from` | `Dockerfile:9,20` |
 
-**Betriebssystem:** Beide Images sind Debian-basiert. `node:20-bookworm-slim` nennt Debian 12 („Bookworm") im Tag. `python:3.11-slim` trägt keine Distributionsangabe im Tag — der `slim`-Tag der offiziellen Python-Images folgt dem jeweils aktuellen Debian-Stable, ist aber ohne Image-Inspektion nicht belegbar.
+**Betriebssystem:** Beide Images sind Debian-basiert. `node:20-bookworm-slim` nennt Debian 12 („Bookworm") im Tag. `python:3.11-slim` trägt keine Distributionsangabe im Tag. Laut `docker history` des lokalen Images `abacus-backup-verify:local` stammt die Basisschicht aus `debian.sh … 'trixie'` (Debian 13, Stand 2026-07-13) mit `PYTHON_VERSION=3.11.15`; für künftige Builds ist der bewegliche Tag nicht zugesichert.
 
-> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: SHA-256-Digests beider Basis-Images sowie die exakte Debian-Version des Runtime-Images. Beide Tags sind beweglich; ohne `docker image inspect` auf einem gebauten Abbild ist der tatsächlich verwendete Stand nicht bestimmbar. **Handlungsoption:** Beide `FROM`-Zeilen auf `@sha256:…` pinnen — dann ist der Stand reproduzierbar und dokumentierbar.
+> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: SHA-256-Digests beider Basis-Images (im lokalen Image nicht hinterlegt, `RepoDigests` enthält nur das lokale Image). Beide Tags sind beweglich; die Debian-Version des Runtime-Images ist für den Build vom 2026-07-28 belegt (13 „trixie"), nicht aber für künftige Builds. **Handlungsoption:** Beide `FROM`-Zeilen auf `@sha256:…` pinnen — dann ist der Stand reproduzierbar und dokumentierbar.
 
 ## Multi-Stage-Aufbau
 
@@ -103,9 +105,17 @@ Es sind **keine** Ressourcengrenzen definiert: `compose.yaml` enthält weder `me
 
 ## Image-Größe und Layer
 
-> ⚠️ NICHT ERMITTELBAR — Quelle fehlt: Gesamtgröße des Images und Größe je Layer. Erfordert `docker history` bzw. `docker image inspect` auf einem gebauten Abbild; es liegt keines vor.
+Quelle: `docker image inspect` / `docker history` auf `abacus-backup-verify:local` (2026-10-12). Gesamtgröße **466 678 307 Byte (≈ 467 MB)**, 11 Layer im Image-Rootfs. Die drei größten Schichten:
 
-Belegbar ist, **welche** Schichten die Größe bestimmen — die drei größten sind nach Dockerfile-Struktur eindeutig:
+| # | Schicht | Größe |
+|---|---|---|
+| 1 | `RUN pip install --no-cache-dir -r …` (`Dockerfile:17`) | 219 MB |
+| 2 | Debian-Basisschicht (`debian.sh … trixie`) | 87,4 MB |
+| 3 | Python-Build-Schicht des Basis-Images (`savedAptMark …`) | 48,7 MB |
+
+Eigene Schichten darüber: `adduser`/`chown` 463 kB (`Dockerfile:25-26`), Frontend-Bundle 242 kB (`Dockerfile:20`), Backend-Code 172 kB (`Dockerfile:19`), `mkdir -p /data/backups` 12,3 kB (`Dockerfile:22`). Der Stand des Images vom 2026-07-28 ist nicht zwingend der des heutigen Quellcodes.
+
+Belegbar aus der Dockerfile-Struktur ist außerdem, **welche** Schichten die Größe bestimmen:
 
 1. Das Basis-Image `python:3.11-slim` selbst (`Dockerfile:9`).
 2. `RUN pip install --no-cache-dir -r requirements.txt` (`Dockerfile:17`) — vier Pakete samt transitivem Baum, darunter `abacusai`; mit Abstand die größte selbst erzeugte Schicht.
@@ -199,4 +209,4 @@ Damit die Health-Abfrage des Dashboards funktioniert, muss `/api/health` ohne An
 - ⚠️ NICHT ERMITTELBAR — Digests beider Basis-Images und exakte Debian-Version des Runtime-Images
 - ⚠️ NICHT ERMITTELBAR — Systempakete im Image mit Version und Lizenz
 - ⚠️ NICHT ERMITTELBAR — UID und GID des Benutzers `app`
-- ⚠️ NICHT ERMITTELBAR — Image-Gesamtgröße und Größe je Layer
+- ~~Image-Gesamtgröße und Größe je Layer~~ — geschlossen 2026-10-12 (lokales Image `abacus-backup-verify:local`, siehe Abschnitt „Image-Größe und Layer")
