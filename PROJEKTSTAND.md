@@ -79,6 +79,22 @@ Die Audit-Änderungen vom 29.09.2026 sind committet:
 - `backend/app/exporters.py:57-66` – `seen` pfadbezogen; mehrfach referenzierte
   Objekte werden nicht mehr durch `str(obj)` ersetzt (Schuld 18).
 
+## Kritische Bugs für den nächsten Lauf
+
+Durchsicht vom 12.10.2026 (Commit `9cac29d`, keine Code-Änderung): **0 kritisch, 4 hoch**
+(1 bekannt, 2 neu und ausgeführt belegt, 1 Verdacht). Einzelheiten mit Fundstelle, Auslöser,
+Fix-Vorschlag und Test in [`docs/BUGS-NAECHSTER-LAUF.md`](docs/BUGS-NAECHSTER-LAUF.md).
+
+- BUG-01 Auflistung endet still an Obergrenzen, ältere Chats fehlen
+  (`backend/app/abacus_client.py:113-147,435`; bekannt als Schuld 4).
+- BUG-02 Fehler beim Auflisten werden verschluckt – der Job endet als „completed" mit 0 oder
+  zu wenigen Chats (`backend/app/abacus_client.py:262-273,448-455`,
+  `backend/app/backup_engine.py:243-256`; neu).
+- BUG-03 Jeder an `/api/connect` gesendete Wert wird als Geheimnis registriert und in allen
+  späteren Exporten geschwärzt (`backend/app/security.py:54-58,69-82`; neu).
+- BUG-04 (Verdacht) Ausweichvarianten rufen eine Deployment-Konversation ohne Konversations-ID
+  ab (`backend/app/abacus_client.py:75-110,648-680`).
+
 ## Offene Probleme nach Priorität
 
 Quellen: Audit 29.09.2026, `todo2026.md`, `docs/12-offene-punkte.md`.

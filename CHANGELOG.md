@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Docs (bug review 2026-10-12)
+
+- New file `docs/BUGS-NAECHSTER-LAUF.md`: four findings of severity "hoch" for the next run (silent truncation of listings, listing errors swallowed so a job ends as `completed`, values sent to `/api/connect` poison the redaction list, suspected fallback call without conversation id) with location, trigger, proposed fix and test. `PROJEKTSTAND.md` gains the section "Kritische Bugs für den nächsten Lauf". No code changes.
+
 ### Added
 
 - **Timed-out export summary:** Jobs record `timed_out_items` (id, title, deployment, failed step) in `result_json` and `manifest.json`. After the job finishes, the UI shows a summary list and a **Retry timed-out items** button.
